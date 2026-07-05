@@ -2,8 +2,13 @@
 import { useQuery } from "@tanstack/react-query"
 import { propertiesApi, authApi, bookingsApi } from "@/lib/api"
 import Link from "next/link"
-import { Plus, Home, Calendar, Star, AlertCircle, CheckCircle, Clock } from "lucide-react"
+import { Plus, Home, Calendar, Star, AlertCircle, Clock } from "lucide-react"
 import { Property, Booking } from "@/types"
+
+const INR = (amount: string | number) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency", currency: "INR", maximumFractionDigits: 0,
+  }).format(Number(amount))
 
 function ProfileIncompleteWarning({ missing }: { missing: string[] }) {
   return (
@@ -57,7 +62,7 @@ function PropertyRow({ property }: { property: Property }) {
       <div className="flex-1 min-w-0">
         <p className="font-medium text-gray-900 truncate">{property.title}</p>
         <p className="text-sm text-gray-500">{property.city}, {property.country}</p>
-        <p className="text-sm text-gray-700 mt-0.5">${property.price_per_night}/night</p>
+        <p className="text-sm text-gray-700 mt-0.5">{INR(property.price_per_night)}/night</p>
       </div>
       <div className="flex items-center gap-3 flex-shrink-0">
         <span className={statusClass[property.status] || "badge"}>{property.status}</span>
@@ -81,13 +86,13 @@ function BookingRow({ booking }: { booking: Booking }) {
     <div className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-100">
       <div className="flex-1 min-w-0">
         <p className="font-medium text-gray-900 truncate">{booking.guest?.full_name}</p>
-        <p className="text-sm text-gray-500 truncate">{booking.property?.title}</p>
+        <p className="text-sm text-gray-500 truncate">{booking.listing?.title || booking.property?.title}</p>
         <p className="text-xs text-gray-400 mt-0.5">
           {booking.check_in} → {booking.check_out} · {booking.nights} nights
         </p>
       </div>
       <div className="text-right flex-shrink-0">
-        <p className="font-semibold text-gray-900">${booking.total_price}</p>
+        <p className="font-semibold text-gray-900">{INR(booking.total_price)}</p>
         <span className={`${statusClass[booking.status]} mt-1`}>{booking.status}</span>
       </div>
       {booking.status === "pending" && (
@@ -127,7 +132,6 @@ export default function HostDashboardPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
 
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-display text-2xl font-bold text-gray-900">Host Dashboard</h1>
@@ -139,21 +143,18 @@ export default function HostDashboardPage() {
         </Link>
       </div>
 
-      {/* Profile warning */}
       {profileStatus && !profileStatus.is_complete && (
         <ProfileIncompleteWarning missing={profileStatus.missing} />
       )}
 
-      {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatCard label="Active listings"  value={activeListings}           icon={<Home className="w-5 h-5" />} />
-        <StatCard label="Pending requests" value={pendingBookings}           icon={<Clock className="w-5 h-5" />} />
-        <StatCard label="Total earned"     value={`₹${totalEarnings.toLocaleString("en-IN")}`} icon={<Calendar className="w-5 h-5" />} />
-        <StatCard label="Avg. rating"      value={avgRating}                icon={<Star className="w-5 h-5" />} />
+        <StatCard label="Active listings"  value={activeListings}      icon={<Home className="w-5 h-5" />} />
+        <StatCard label="Pending requests" value={pendingBookings}      icon={<Clock className="w-5 h-5" />} />
+        <StatCard label="Total earned"     value={INR(totalEarnings)}   icon={<Calendar className="w-5 h-5" />} />
+        <StatCard label="Avg. rating"      value={avgRating}            icon={<Star className="w-5 h-5" />} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Listings */}
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-display font-semibold text-gray-900">Your listings</h2>
@@ -174,7 +175,6 @@ export default function HostDashboardPage() {
           </div>
         </div>
 
-        {/* Recent bookings */}
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-display font-semibold text-gray-900">Recent bookings</h2>

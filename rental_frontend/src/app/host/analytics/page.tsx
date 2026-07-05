@@ -1,10 +1,15 @@
 "use client"
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/api"
-import { TrendingUp, DollarSign, Calendar, Star, Home, Users } from "lucide-react"
+import { DollarSign, Calendar, Star, Home } from "lucide-react"
+
+const INR = (amount: string | number) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency", currency: "INR", maximumFractionDigits: 0,
+  }).format(Number(amount))
 
 function StatCard({ label, value, sub, icon, color = "brand" }: {
-  label: string; value: string; sub?: string
+  label: string; value: string | number; sub?: string
   icon: React.ReactNode; color?: string
 }) {
   const colors: Record<string, string> = {
@@ -36,7 +41,7 @@ function EarningsChart({ data }: { data: { month: string; earnings: number }[] }
         {data.map((d) => (
           <div key={d.month} className="flex-1 flex flex-col items-center gap-2">
             <p className="text-xs font-medium text-gray-700">
-              {d.earnings > 0 ? `$${Math.round(d.earnings)}` : ""}
+              {d.earnings > 0 ? INR(Math.round(d.earnings)) : ""}
             </p>
             <div className="w-full rounded-t-lg bg-brand-100 relative overflow-hidden" style={{ height: "100px" }}>
               <div
@@ -72,7 +77,7 @@ function PropertyRow({ prop }: { prop: any }) {
         </div>
       </div>
       <div className="text-right flex-shrink-0 ml-4">
-        <p className="text-sm font-bold text-gray-900">${prop.earnings.toFixed(0)}</p>
+        <p className="text-sm font-bold text-gray-900">{INR(prop.earnings)}</p>
         <p className="text-xs text-gray-400">{prop.total_bookings} stays</p>
       </div>
     </div>
@@ -88,7 +93,9 @@ export default function AnalyticsPage() {
   if (isLoading) return (
     <div className="max-w-6xl mx-auto px-4 py-10">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {[...Array(4)].map((_, i) => <div key={i} className="card p-6 h-28 animate-pulse bg-gray-100" />)}
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="card p-6 h-28 animate-pulse bg-gray-100" />
+        ))}
       </div>
     </div>
   )
@@ -108,8 +115,8 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Total earned"
-          value={`$${earnings.total.toFixed(0)}`}
-          sub={`$${earnings.this_month.toFixed(0)} this month`}
+          value={INR(earnings.total)}
+          sub={`${INR(earnings.this_month)} this month`}
           icon={<DollarSign className="w-5 h-5" />}
           color="green"
         />
@@ -172,7 +179,7 @@ export default function AnalyticsPage() {
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-medium text-gray-900">{b.check_in}</p>
-                  <p className="text-xs text-gray-400">{b.nights} nights · ${b.total}</p>
+                  <p className="text-xs text-gray-400">{b.nights} nights · {INR(b.total)}</p>
                 </div>
               </div>
             ))}

@@ -3,8 +3,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { bookingsApi } from "@/lib/api"
 import { Booking } from "@/types"
 import { useState } from "react"
-import { Calendar, MapPin, User, Check, X, ChevronDown } from "lucide-react"
+import { Calendar, User, Check, X, ChevronDown } from "lucide-react"
 import toast from "react-hot-toast"
+
+const INR = (amount: string | number) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency", currency: "INR", maximumFractionDigits: 0,
+  }).format(Number(amount))
 
 const STATUS_TABS = ["all", "pending", "confirmed", "completed", "cancelled"] as const
 type Tab = typeof STATUS_TABS[number]
@@ -26,8 +31,12 @@ function BookingCard({ booking }: { booking: Booking }) {
   })
   const cancel = useMutation({
     mutationFn: () => bookingsApi.hostCancel(booking.id, reason),
-    onSuccess: () => { toast.success("Booking cancelled. Guest will be refunded."); qc.invalidateQueries({ queryKey: ["host-bookings"] }); setShowCancel(false) },
-    onError:   (e: any) => toast.error(e?.response?.data?.detail || "Failed"),
+    onSuccess: () => {
+      toast.success("Booking cancelled. Guest will be refunded.")
+      qc.invalidateQueries({ queryKey: ["host-bookings"] })
+      setShowCancel(false)
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.detail || "Failed"),
   })
 
   const statusColor: Record<string, string> = {
@@ -38,8 +47,12 @@ function BookingCard({ booking }: { booking: Booking }) {
     rejected:  "bg-red-100 text-red-700",
   }
 
+  // support both field names
+  const prop = (booking as any).listing || booking.property
+
   return (
     <div className="card p-5 space-y-4">
+
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -56,7 +69,7 @@ function BookingCard({ booking }: { booking: Booking }) {
 
       {/* Property + dates */}
       <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
-        <p className="font-medium text-gray-900">{booking.property?.title}</p>
+        <p className="font-medium text-gray-900">{prop?.title}</p>
         <div className="flex items-center gap-1.5 text-gray-500">
           <Calendar className="w-3.5 h-3.5" />
           {booking.check_in} → {booking.check_out} · {booking.nights} night{booking.nights !== 1 ? "s" : ""}
@@ -70,16 +83,18 @@ function BookingCard({ booking }: { booking: Booking }) {
       {/* Price breakdown */}
       <div className="text-sm space-y-1">
         <div className="flex justify-between text-gray-500">
-          <span>${booking.price_per_night} × {booking.nights} nights</span>
-          <span>${booking.subtotal}</span>
+          <span>{INR(booking.price_per_night)} × {booking.nights} night{booking.nights !== 1 ? "s" : ""}</span>
+          <span>{INR(booking.subtotal)}</span>
         </div>
         {parseFloat(booking.cleaning_fee) > 0 && (
           <div className="flex justify-between text-gray-500">
-            <span>Cleaning fee</span><span>${booking.cleaning_fee}</span>
+            <span>Cleaning fee</span>
+            <span>{INR(booking.cleaning_fee)}</span>
           </div>
         )}
         <div className="flex justify-between font-bold text-gray-900 pt-1 border-t border-gray-100">
-          <span>Total</span><span>${booking.total_price}</span>
+          <span>Total</span>
+          <span>{INR(booking.total_price)}</span>
         </div>
       </div>
 
@@ -111,7 +126,8 @@ function BookingCard({ booking }: { booking: Booking }) {
             onClick={() => setShowCancel((s) => !s)}
             className="text-sm text-red-500 hover:underline flex items-center gap-1"
           >
-            Cancel booking <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showCancel ? "rotate-180" : ""}`} />
+            Cancel booking{" "}
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showCancel ? "rotate-180" : ""}`} />
           </button>
           {showCancel && (
             <div className="mt-3 space-y-2">
@@ -142,6 +158,7 @@ function BookingCard({ booking }: { booking: Booking }) {
 
 export default function HostBookingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>("all")
+
   const { data: bookings = [], isLoading } = useQuery({
     queryKey: ["host-bookings", activeTab],
     queryFn:  () => bookingsApi.hostBookings(activeTab === "all" ? undefined : activeTab).then((r) => r.data),
@@ -191,7 +208,9 @@ export default function HostBookingsPage() {
       ) : bookings.length === 0 ? (
         <div className="card p-16 text-center text-gray-400">
           <Calendar className="w-10 h-10 mx-auto mb-3 opacity-40" />
-          <p className="font-medium text-gray-600">No {activeTab === "all" ? "" : activeTab} bookings yet</p>
+          <p className="font-medium text-gray-600">
+            No {activeTab === "all" ? "" : activeTab} bookings yet
+          </p>
         </div>
       ) : (
         <div className="space-y-4">
