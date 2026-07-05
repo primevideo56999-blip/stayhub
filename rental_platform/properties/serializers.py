@@ -10,10 +10,17 @@ class AmenitySerializer(serializers.ModelSerializer):
 
 
 class PropertyPhotoSerializer(serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()  # add this
+
     class Meta:
         model  = PropertyPhoto
         fields = ["id", "image", "caption", "is_cover", "order", "uploaded_at"]
         read_only_fields = ["uploaded_at"]
+
+    def get_image(self, obj):  # add this
+        if obj.image:
+            return obj.image.url
+        return None
 
 
 class PropertyAvailabilitySerializer(serializers.ModelSerializer):
@@ -39,9 +46,8 @@ class PropertyListSerializer(serializers.ModelSerializer):
 
     def get_cover_photo(self, obj):
         photo = obj.cover_photo
-        if photo:
-            request = self.context.get("request")
-            return request.build_absolute_uri(photo.image.url) if request else photo.image.url
+        if photo and photo.image:
+            return photo.image.url  # cloudinary URL is already absolute
         return None
 
 

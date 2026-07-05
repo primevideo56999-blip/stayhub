@@ -26,6 +26,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.ReadOnlyField()
+    avatar = serializers.SerializerMethodField()  # add this
 
     class Meta:
         model  = User
@@ -35,6 +36,11 @@ class UserSerializer(serializers.ModelSerializer):
             "avatar", "bio", "is_verified", "created_at",
         ]
         read_only_fields = ["id", "email", "role", "phone_verified", "is_verified", "created_at"]
+
+    def get_avatar(self, obj):  # add this
+        if obj.avatar:
+            return obj.avatar.url  # cloudinary returns full URL itself
+        return None
 
 
 class HostProfileSerializer(serializers.ModelSerializer):
