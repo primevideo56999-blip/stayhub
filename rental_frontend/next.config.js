@@ -4,6 +4,7 @@ const nextConfig = {
     remotePatterns: [
       { protocol: "https", hostname: "**.amazonaws.com" },
       { protocol: "https", hostname: "res.cloudinary.com" },
+      { protocol: "https", hostname: "**.cloudinary.com" },
       { protocol: "http",  hostname: "localhost" },
       { protocol: "http",  hostname: "api" },
     ],
