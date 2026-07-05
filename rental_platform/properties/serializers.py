@@ -21,6 +21,8 @@ class PropertyPhotoSerializer(serializers.ModelSerializer):
         if not obj.image:
             return None
         name = str(obj.image)
+        if name.startswith('https:/') and not name.startswith('https://'):
+            return 'https://' + name[7:]
         if name.startswith('http'):
             return name
         if name.startswith('res.cloudinary.com'):
@@ -54,6 +56,8 @@ class PropertyListSerializer(serializers.ModelSerializer):
         if not photo or not photo.image:
             return None
         name = str(photo.image)
+        if name.startswith('https:/') and not name.startswith('https://'):
+            return 'https://' + name[7:]
         if name.startswith('http'):
             return name
         if name.startswith('res.cloudinary.com'):

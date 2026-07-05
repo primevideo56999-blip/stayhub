@@ -41,12 +41,14 @@ class UserSerializer(serializers.ModelSerializer):
         if not obj.avatar:
             return None
         name = str(obj.avatar)
+        # fix single-slash https:/ → https://
+        if name.startswith('https:/') and not name.startswith('https://'):
+            return 'https://' + name[7:]
         if name.startswith('http'):
             return name
         if name.startswith('res.cloudinary.com'):
             return f"https://{name}"
         return f"https://res.cloudinary.com/cgtjcyy4/{name}"
-
 
 class HostProfileSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
