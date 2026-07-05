@@ -120,14 +120,23 @@ SIMPLE_JWT = {
 CORS_ALLOW_ALL_ORIGINS = True
 
 # ── Cloudinary ────────────────────────────────────────────────────────────────
+# CLOUDINARY_STORAGE = {
+#     "CLOUD_NAME": os.environ.get("CLOUDINARY_CLOUD_NAME", "cgtjcyy4"),
+#     "API_KEY":    os.environ.get("CLOUDINARY_API_KEY", ""),
+#     "API_SECRET": os.environ.get("CLOUDINARY_API_SECRET", ""),
+# }
+# DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
+# # MEDIA_URL = f"https://res.cloudinary.com/{os.environ.get('CLOUDINARY_CLOUD_NAME', '')}/"
+# MEDIA_URL = '/media/'
+
 CLOUDINARY_STORAGE = {
     "CLOUD_NAME": os.environ.get("CLOUDINARY_CLOUD_NAME", "cgtjcyy4"),
     "API_KEY":    os.environ.get("CLOUDINARY_API_KEY", ""),
     "API_SECRET": os.environ.get("CLOUDINARY_API_SECRET", ""),
+    "PREFIX":     "",  # no prefix
 }
 DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
-# MEDIA_URL = f"https://res.cloudinary.com/{os.environ.get('CLOUDINARY_CLOUD_NAME', '')}/"
-MEDIA_URL = '/media/'
+MEDIA_URL = ""  # empty — let cloudinary build full URL
 
 # ── Static ────────────────────────────────────────────────────────────────────
 STATIC_URL  = "/static/"
