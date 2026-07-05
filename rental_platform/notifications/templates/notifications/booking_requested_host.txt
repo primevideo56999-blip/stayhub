@@ -1,0 +1,15 @@
+Hi {{ booking.host.first_name }},
+
+You have a new booking request!
+
+Property:   {{ booking.property.title }}
+Guest:      {{ booking.guest.full_name }}
+Check-in:   {{ booking.check_in }}
+Check-out:  {{ booking.check_out }}
+Nights:     {{ booking.nights }}
+Guests:     {{ booking.num_guests }}
+Total:      ${{ booking.total_price }}
+
+Log in to your dashboard to accept or decline within 24 hours.
+
+The Rental Platform Team

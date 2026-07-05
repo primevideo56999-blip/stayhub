@@ -1,0 +1,13 @@
+Hi {{ booking.guest.first_name }},
+
+Your booking request has been sent!
+
+Property:   {{ booking.property.title }}
+Check-in:   {{ booking.check_in }}
+Check-out:  {{ booking.check_out }}
+Nights:     {{ booking.nights }}
+Total:      ${{ booking.total_price }}
+
+You'll be notified once the host responds. Requests expire after 24 hours if not accepted.
+
+The Rental Platform Team

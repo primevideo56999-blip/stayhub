@@ -1,0 +1,14 @@
+Hi {{ booking.guest.first_name }},
+
+Great news — your booking is confirmed!
+
+Property:    {{ booking.property.title }}
+Address:     {{ booking.property.address_line1 }}, {{ booking.property.city }}
+Check-in:    {{ booking.check_in }} from {{ booking.property.check_in_time }}
+Check-out:   {{ booking.check_out }} by {{ booking.property.check_out_time }}
+Guests:      {{ booking.num_guests }}
+Total paid:  ${{ booking.total_price }}
+
+Have a great stay!
+
+The Rental Platform Team

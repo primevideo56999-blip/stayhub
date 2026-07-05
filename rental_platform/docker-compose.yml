@@ -1,0 +1,88 @@
+version: "3.9"
+
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  db:
+    image: postgis/postgis:16-3.4   # PostgreSQL 16 + PostGIS for location queries
+    container_name: rental_db
+    environment:
+      POSTGRES_DB: rentaldb
+      POSTGRES_USER: rentaluser
+      POSTGRES_PASSWORD: rentalpass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rentaluser -d rentaldb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Redis ───────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: rental_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ── Django API ──────────────────────────────────────────────────────────────
+  api:
+    build: .
+    container_name: rental_api
+    entrypoint: ["/app/entrypoint.sh"]
+    command: python manage.py runserver 0.0.0.0:8000 --settings=core.settings.development
+    volumes:
+      - .:/app                        # live reload — code changes reflect instantly
+      - media_files:/app/media
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.docker
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ── Celery Worker ───────────────────────────────────────────────────────────
+  celery:
+    build: .
+    container_name: rental_celery
+    entrypoint: []                    # skip entrypoint for celery
+    command: celery -A core worker --loglevel=info
+    volumes:
+      - .:/app
+    env_file:
+      - .env.docker
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ── Celery Beat (scheduled tasks) ──────────────────────────────────────────
+  celery-beat:
+    build: .
+    container_name: rental_celery_beat
+    entrypoint: []
+    command: celery -A core beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    volumes:
+      - .:/app
+    env_file:
+      - .env.docker
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  media_files:

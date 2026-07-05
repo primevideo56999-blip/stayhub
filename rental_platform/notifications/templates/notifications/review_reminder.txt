@@ -1,0 +1,9 @@
+Hi {{ booking.guest.first_name }},
+
+How was your stay at {{ booking.property.title }}?
+
+Reviews help other guests and reward great hosts. It only takes a minute.
+
+Leave your review here: http://localhost:3000/bookings/{{ booking.id }}/review
+
+The Rental Platform Team

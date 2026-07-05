@@ -1,0 +1,14 @@
+Hi {{ booking.guest.first_name }},
+
+Your check-in is tomorrow!
+
+Property:   {{ booking.property.title }}
+Address:    {{ booking.property.address_line1 }}, {{ booking.property.city }}
+Check-in:   {{ booking.check_in }} from {{ booking.property.check_in_time }}
+Check-out:  {{ booking.check_out }} by {{ booking.property.check_out_time }}
+
+House rules: {{ booking.property.house_rules|default:"None specified" }}
+
+Enjoy your stay!
+
+The Rental Platform Team

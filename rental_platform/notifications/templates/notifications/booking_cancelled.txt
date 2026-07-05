@@ -1,0 +1,12 @@
+Hi,
+
+A booking has been cancelled.
+
+Property:    {{ booking.property.title }}
+Check-in:    {{ booking.check_in }}
+Check-out:   {{ booking.check_out }}
+Cancelled by: {{ booking.get_cancelled_by_display }}
+Reason:      {{ booking.cancellation_reason|default:"No reason provided" }}
+Refund:      ${{ booking.refund_amount|default:"0.00" }}
+
+The Rental Platform Team

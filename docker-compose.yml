@@ -1,0 +1,104 @@
+version: "3.9"
+
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: rental_db
+    environment:
+      POSTGRES_DB: rentaldb
+      POSTGRES_USER: rentaluser
+      POSTGRES_PASSWORD: rentalpass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rentaluser -d rentaldb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Redis ───────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: rental_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ── Django API ──────────────────────────────────────────────────────────────
+  api:
+    build: ./rental_platform
+    container_name: rental_api
+    entrypoint: ["/app/entrypoint.sh"]
+    command: python manage.py runserver 0.0.0.0:8000 --settings=core.settings.development
+    volumes:
+      - ./rental_platform:/app
+      - media_files:/app/media
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./rental_platform/.env.docker
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ── Celery Worker ───────────────────────────────────────────────────────────
+  celery:
+    build: ./rental_platform
+    container_name: rental_celery
+    entrypoint: []
+    command: celery -A core worker --loglevel=info
+    volumes:
+      - ./rental_platform:/app
+    env_file:
+      - ./rental_platform/.env.docker
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ── Celery Beat ─────────────────────────────────────────────────────────────
+  celery-beat:
+    build: ./rental_platform
+    container_name: rental_celery_beat
+    entrypoint: []
+    command: celery -A core beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    volumes:
+      - ./rental_platform:/app
+    env_file:
+      - ./rental_platform/.env.docker
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ── Next.js Frontend ────────────────────────────────────────────────────────
+  frontend:
+    build: ./rental_frontend
+    container_name: rental_frontend
+    command: npm run dev
+    volumes:
+      - ./rental_frontend:/app
+      - /app/node_modules          # preserve node_modules inside container
+      - /app/.next                 # preserve Next.js build cache
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  media_files:

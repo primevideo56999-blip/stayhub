@@ -1,0 +1,10 @@
+Hi {{ booking.guest.first_name }},
+
+Unfortunately the host was unable to accept your booking request.
+
+Property:  {{ booking.property.title }}
+Dates:     {{ booking.check_in }} → {{ booking.check_out }}
+
+No payment was taken. Please search for other available properties.
+
+The Rental Platform Team

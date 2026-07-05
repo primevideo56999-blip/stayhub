@@ -1,0 +1,9 @@
+Hi {{ review.host.first_name }},
+
+{{ review.guest.full_name }} left a {{ review.overall }}-star review on {{ review.property.title }}.
+
+"{{ review.comment }}"
+
+Log in to your dashboard to read the full review and respond.
+
+The Rental Platform Team
