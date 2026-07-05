@@ -23,6 +23,8 @@ class PropertyPhotoSerializer(serializers.ModelSerializer):
         name = str(obj.image)
         if name.startswith('http'):
             return name
+        if name.startswith('res.cloudinary.com'):
+            return f"https://{name}"
         return f"https://res.cloudinary.com/cgtjcyy4/{name}"
 
 
@@ -54,8 +56,9 @@ class PropertyListSerializer(serializers.ModelSerializer):
         name = str(photo.image)
         if name.startswith('http'):
             return name
+        if name.startswith('res.cloudinary.com'):
+            return f"https://{name}"
         return f"https://res.cloudinary.com/cgtjcyy4/{name}"
-
 
 class PropertyDetailSerializer(serializers.ModelSerializer):
     """Full detail — used on the property detail page."""

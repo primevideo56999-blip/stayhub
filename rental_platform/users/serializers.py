@@ -40,10 +40,11 @@ class UserSerializer(serializers.ModelSerializer):
     def get_avatar(self, obj):
         if not obj.avatar:
             return None
-        name = str(obj.avatar)  # raw stored value e.g. "avatars/IMG_3332"
-        # if already a full URL, return as-is
+        name = str(obj.avatar)
         if name.startswith('http'):
             return name
+        if name.startswith('res.cloudinary.com'):
+            return f"https://{name}"
         return f"https://res.cloudinary.com/cgtjcyy4/{name}"
 
 
