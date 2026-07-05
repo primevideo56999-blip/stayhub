@@ -20,14 +20,13 @@ class PropertyPhotoSerializer(serializers.ModelSerializer):
     def get_image(self, obj):
         if not obj.image:
             return None
-        name = str(obj.image)
-        if name.startswith('https:/') and not name.startswith('https://'):
-            return 'https://' + name[7:]
-        if name.startswith('http'):
-            return name
-        if name.startswith('res.cloudinary.com'):
-            return f"https://{name}"
-        return f"https://res.cloudinary.com/cgtjcyy4/{name}"
+        url = str(obj.image.name if hasattr(obj.image, 'name') else obj.image)
+        if 'res.cloudinary.com' in url:
+            parts = url.split('cgtjcyy4/')
+            if len(parts) > 1:
+                path = parts[-1]
+                return f"https://res.cloudinary.com/cgtjcyy4/image/upload/{path}"
+        return url
 
 
 class PropertyAvailabilitySerializer(serializers.ModelSerializer):
@@ -55,14 +54,13 @@ class PropertyListSerializer(serializers.ModelSerializer):
         photo = obj.cover_photo
         if not photo or not photo.image:
             return None
-        name = str(photo.image)
-        if name.startswith('https:/') and not name.startswith('https://'):
-            return 'https://' + name[7:]
-        if name.startswith('http'):
-            return name
-        if name.startswith('res.cloudinary.com'):
-            return f"https://{name}"
-        return f"https://res.cloudinary.com/cgtjcyy4/{name}"
+        url = str(photo.image.name if hasattr(photo.image, 'name') else photo.image)
+        if 'res.cloudinary.com' in url:
+            parts = url.split('cgtjcyy4/')
+            if len(parts) > 1:
+                path = parts[-1]
+                return f"https://res.cloudinary.com/cgtjcyy4/image/upload/{path}"
+        return url
 
 class PropertyDetailSerializer(serializers.ModelSerializer):
     """Full detail — used on the property detail page."""

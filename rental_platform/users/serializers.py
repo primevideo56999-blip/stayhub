@@ -40,15 +40,15 @@ class UserSerializer(serializers.ModelSerializer):
     def get_avatar(self, obj):
         if not obj.avatar:
             return None
-        name = str(obj.avatar)
-        # fix single-slash https:/ → https://
-        if name.startswith('https:/') and not name.startswith('https://'):
-            return 'https://' + name[7:]
-        if name.startswith('http'):
-            return name
-        if name.startswith('res.cloudinary.com'):
-            return f"https://{name}"
-        return f"https://res.cloudinary.com/cgtjcyy4/{name}"
+        url = str(obj.avatar.name if hasattr(obj.avatar, 'name') else obj.avatar)
+        # clean up any malformed URLs stored in DB
+        if 'res.cloudinary.com' in url:
+            # extract just the public_id part after the cloud name
+            parts = url.split('cgtjcyy4/')
+            if len(parts) > 1:
+                path = parts[-1]  # e.g. "avatars/IMG_3332_kde50s"
+                return f"https://res.cloudinary.com/cgtjcyy4/image/upload/{path}"
+        return url
 
 class HostProfileSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
