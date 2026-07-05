@@ -1,13 +1,30 @@
 "use client"
-import { useState, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { propertiesApi } from "@/lib/api"
 import { Property } from "@/types"
 import Link from "next/link"
-import { Search, SlidersHorizontal, Star, Users, Bed, Home, MapPin, X } from "lucide-react"
-import { WishlistButton } from "@/components/ui/WishlistButton"
+import {
+  Search, SlidersHorizontal, Star, Users, Bed,
+  Home, MapPin, X, Navigation, Loader2
+} from "lucide-react"
 import { useAuthStore } from "@/store/auth"
 
+// ── Currency formatter ────────────────────────────────────────────────────────
+const INR = (amount: string | number) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency", currency: "INR", maximumFractionDigits: 0,
+  }).format(Number(amount))
+
+// ── Location suggestion type ──────────────────────────────────────────────────
+interface LocationSuggestion {
+  display_name: string
+  city: string
+  lat: string
+  lon: string
+}
+
+// ── Property Card ─────────────────────────────────────────────────────────────
 function PropertyCard({ property }: { property: Property }) {
   const { isAuthenticated } = useAuthStore()
   return (
@@ -15,8 +32,11 @@ function PropertyCard({ property }: { property: Property }) {
       <div className="card overflow-hidden hover:shadow-card-hover transition-shadow duration-200">
         <div className="aspect-[4/3] bg-gray-100 relative overflow-hidden">
           {property.cover_photo ? (
-            <img src={property.cover_photo} alt={property.title}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+            <img
+              src={property.cover_photo}
+              alt={property.title}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
               <Home className="w-10 h-10 text-gray-300" />
@@ -25,11 +45,6 @@ function PropertyCard({ property }: { property: Property }) {
           <div className="absolute top-3 left-3 bg-white/90 backdrop-blur rounded-lg px-2 py-1 text-xs font-medium capitalize text-gray-600">
             {property.property_type?.replace("_", " ")}
           </div>
-          {isAuthenticated() && (
-            <div className="absolute top-3 right-3">
-              <WishlistButton propertyId={property.id} />
-            </div>
-          )}
         </div>
         <div className="p-4">
           <div className="flex items-start justify-between gap-2 mb-1">
@@ -44,14 +59,19 @@ function PropertyCard({ property }: { property: Property }) {
             )}
           </div>
           <p className="text-xs text-gray-500 mb-3 flex items-center gap-1">
-            <MapPin className="w-3 h-3" /> {property.city}, {property.country}
+            <MapPin className="w-3 h-3 flex-shrink-0" />
+            {property.city}, {property.country}
           </p>
           <div className="flex items-center gap-3 text-xs text-gray-400 mb-3">
-            <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" /> {property.max_guests}</span>
-            <span className="flex items-center gap-1"><Bed className="w-3.5 h-3.5" /> {property.beds} bed{property.beds !== 1 ? "s" : ""}</span>
+            <span className="flex items-center gap-1">
+              <Users className="w-3.5 h-3.5" /> {property.max_guests}
+            </span>
+            <span className="flex items-center gap-1">
+              <Bed className="w-3.5 h-3.5" /> {property.beds} bed{property.beds !== 1 ? "s" : ""}
+            </span>
           </div>
           <div className="flex items-baseline gap-1">
-            <span className="font-bold text-gray-900">${property.price_per_night}</span>
+            <span className="font-bold text-gray-900">{INR(property.price_per_night)}</span>
             <span className="text-xs text-gray-400">/ night</span>
           </div>
         </div>
@@ -60,10 +80,111 @@ function PropertyCard({ property }: { property: Property }) {
   )
 }
 
-const PROPERTY_TYPES = ["apartment","house","villa","studio","cabin","hotel_room","hostel"]
+// ── Location search input with suggestions ────────────────────────────────────
+function LocationInput({
+  value,
+  onChange,
+  onSelect,
+}: {
+  value: string
+  onChange: (v: string) => void
+  onSelect: (city: string) => void
+}) {
+  const [suggestions, setSuggestions]   = useState<LocationSuggestion[]>([])
+  const [showDropdown, setShowDropdown] = useState(false)
+  const [loading, setLoading]           = useState(false)
+  const debounceRef = useRef<NodeJS.Timeout>()
+
+  const fetchSuggestions = useCallback(async (query: string) => {
+    if (query.length < 2) { setSuggestions([]); return }
+    setLoading(true)
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=6&featuretype=city`,
+        { headers: { "Accept-Language": "en" } }
+      )
+      const data = await res.json()
+      const mapped: LocationSuggestion[] = data.map((item: any) => ({
+        display_name: item.display_name,
+        city: item.address?.city
+          || item.address?.town
+          || item.address?.village
+          || item.address?.county
+          || item.name,
+        lat: item.lat,
+        lon: item.lon,
+      }))
+      setSuggestions(mapped)
+      setShowDropdown(true)
+    } catch {
+      setSuggestions([])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  const handleChange = (v: string) => {
+    onChange(v)
+    clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => fetchSuggestions(v), 350)
+  }
+
+  const handleSelect = (s: LocationSuggestion) => {
+    onChange(s.city)
+    onSelect(s.city)
+    setShowDropdown(false)
+    setSuggestions([])
+  }
+
+  return (
+    <div className="relative flex-1">
+      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 z-10" />
+      {loading && (
+        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 animate-spin z-10" />
+      )}
+      <input
+        value={value}
+        onChange={(e) => handleChange(e.target.value)}
+        onFocus={() => suggestions.length > 0 && setShowDropdown(true)}
+        onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+        className="input pl-9 pr-9"
+        placeholder="Search city or area…"
+      />
+      {showDropdown && suggestions.length > 0 && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-float z-50 overflow-hidden">
+          {suggestions.map((s, i) => (
+            <button
+              key={i}
+              type="button"
+              onMouseDown={() => handleSelect(s)}
+              className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-start gap-3 border-b border-gray-50 last:border-0"
+            >
+              <MapPin className="w-4 h-4 text-brand-400 flex-shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate">{s.city}</p>
+                <p className="text-xs text-gray-400 truncate">{s.display_name}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Main Search Page ──────────────────────────────────────────────────────────
+const PROPERTY_TYPES = [
+  "apartment","house","villa","studio","cabin","hotel_room","hostel"
+]
 
 export default function SearchPage() {
   const today = new Date().toISOString().split("T")[0]
+
+  const [locationCity, setLocationCity]       = useState("")
+  const [locationDetected, setLocationDetected] = useState(false)
+  const [locationLoading, setLocationLoading]   = useState(false)
+  const [locationBanner, setLocationBanner]     = useState(false)
+
   const [filters, setFilters] = useState({
     search:        "",
     city:          "",
@@ -78,126 +199,281 @@ export default function SearchPage() {
   const [applied, setApplied] = useState<typeof filters>(filters)
   const [showFilters, setShowFilters] = useState(false)
 
+  // ── Auto-detect location on mount ─────────────────────────────────────────
+  useEffect(() => {
+    if (!navigator.geolocation) return
+    setLocationLoading(true)
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude, longitude } = pos.coords
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+            { headers: { "Accept-Language": "en" } }
+          )
+          const data = await res.json()
+          const city =
+            data.address?.city ||
+            data.address?.town ||
+            data.address?.village ||
+            data.address?.county ||
+            ""
+          if (city) {
+            setLocationCity(city)
+            setLocationDetected(true)
+            setLocationBanner(true)
+            const newFilters = { ...filters, city }
+            setFilters(newFilters)
+            setApplied(newFilters)
+          }
+        } catch {}
+        setLocationLoading(false)
+      },
+      () => setLocationLoading(false),
+      { timeout: 5000 }
+    )
+  }, [])
+
   const { data, isLoading } = useQuery({
     queryKey: ["properties", applied],
-    queryFn:  () => propertiesApi.list({
-      search:        applied.search || undefined,
-      city:          applied.city || undefined,
-      check_in:      applied.check_in || undefined,
-      check_out:     applied.check_out || undefined,
-      min_price:     applied.min_price || undefined,
-      max_price:     applied.max_price || undefined,
-      min_guests:    applied.min_guests || undefined,
-      property_type: applied.property_type || undefined,
-      allows_pets:   applied.allows_pets || undefined,
-    }).then((r) => r.data),
+    queryFn: () =>
+      propertiesApi.list({
+        search:        applied.search || undefined,
+        city:          applied.city || undefined,
+        check_in:      applied.check_in || undefined,
+        check_out:     applied.check_out || undefined,
+        min_price:     applied.min_price || undefined,
+        max_price:     applied.max_price || undefined,
+        min_guests:    applied.min_guests || undefined,
+        property_type: applied.property_type || undefined,
+        allows_pets:   applied.allows_pets || undefined,
+      }).then((r) => r.data),
   })
 
   const properties: Property[] = data?.results || data || []
+
   const applyFilters = () => setApplied({ ...filters })
+
   const clearFilters = () => {
-    const empty = { search:"",city:"",check_in:"",check_out:"",min_price:"",max_price:"",min_guests:"",property_type:"",allows_pets:false }
-    setFilters(empty); setApplied(empty)
+    const empty = {
+      search:"", city:"", check_in:"", check_out:"",
+      min_price:"", max_price:"", min_guests:"",
+      property_type:"", allows_pets: false,
+    }
+    setFilters(empty)
+    setApplied(empty)
+    setLocationBanner(false)
   }
-  const hasFilters = Object.entries(applied).some(([k, v]) => k !== "search" && Boolean(v))
+
+  const hasActiveFilters = Object.entries(applied).some(([k, v]) =>
+    k !== "search" && Boolean(v)
+  )
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
 
+      {/* Location detected banner */}
+      {locationBanner && locationDetected && (
+        <div className="flex items-center gap-3 bg-brand-50 border border-brand-200 rounded-xl px-4 py-3 mb-4">
+          <Navigation className="w-4 h-4 text-brand-500 flex-shrink-0" />
+          <p className="text-sm text-brand-700 flex-1">
+            Showing properties near <strong>{locationCity}</strong>
+          </p>
+          <button
+            onClick={() => {
+              setLocationBanner(false)
+              const newFilters = { ...filters, city: "" }
+              setFilters(newFilters)
+              setApplied(newFilters)
+            }}
+            className="text-brand-400 hover:text-brand-600"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Loading location */}
+      {locationLoading && (
+        <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Detecting your location…
+        </div>
+      )}
+
       {/* Search bar */}
-      <div className="flex gap-2 mb-4">
-        <div className="flex-1 relative">
+      <div className="flex gap-2 mb-4 flex-wrap sm:flex-nowrap">
+        {/* Location input with suggestions */}
+        <LocationInput
+          value={filters.city}
+          onChange={(v) => setFilters((f) => ({ ...f, city: v }))}
+          onSelect={(city) => {
+            const newFilters = { ...filters, city }
+            setFilters(newFilters)
+            setApplied(newFilters)
+          }}
+        />
+
+        {/* Keyword search */}
+        <div className="relative flex-1 sm:flex-none sm:w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             value={filters.search}
             onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
             onKeyDown={(e) => e.key === "Enter" && applyFilters()}
-            className="input pl-9"
-            placeholder="Search by city, title…"
+            className="input pl-9 w-full"
+            placeholder="Keyword…"
           />
         </div>
 
-        {/* Date pickers inline */}
-        <input type="date" min={today} value={filters.check_in}
-          onChange={(e) => setFilters((f) => ({ ...f, check_in: e.target.value }))}
-          className="input w-36 text-sm" placeholder="Check-in" />
-        <input type="date" min={filters.check_in || today} value={filters.check_out}
+        {/* Dates */}
+        <input
+          type="date" min={today} value={filters.check_in}
+          onChange={(e) => setFilters((f) => ({ ...f, check_in: e.target.value, check_out: "" }))}
+          className="input w-36 text-sm flex-shrink-0"
+        />
+        <input
+          type="date" min={filters.check_in || today} value={filters.check_out}
           onChange={(e) => setFilters((f) => ({ ...f, check_out: e.target.value }))}
-          className="input w-36 text-sm" placeholder="Check-out" />
+          className="input w-36 text-sm flex-shrink-0"
+        />
 
-        <button onClick={() => setShowFilters((s) => !s)}
-          className={`btn-secondary flex items-center gap-2 ${showFilters ? "border-brand-400 text-brand-600" : ""}`}>
+        <button
+          onClick={() => setShowFilters((s) => !s)}
+          className={`btn-secondary flex items-center gap-2 flex-shrink-0 ${showFilters ? "border-brand-400 text-brand-600" : ""}`}
+        >
           <SlidersHorizontal className="w-4 h-4" />
           Filters
-          {hasFilters && <span className="w-2 h-2 rounded-full bg-brand-500" />}
+          {hasActiveFilters && <span className="w-2 h-2 rounded-full bg-brand-500" />}
         </button>
 
-        <button onClick={applyFilters} className="btn-primary flex items-center gap-2">
+        <button onClick={applyFilters} className="btn-primary flex items-center gap-2 flex-shrink-0">
           <Search className="w-4 h-4" /> Search
         </button>
       </div>
 
       {/* Expanded filters */}
       {showFilters && (
-        <div className="card p-5 mb-5 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4">
+        <div className="card p-5 mb-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
           <div>
-            <label className="label">City</label>
-            <input value={filters.city} onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))} className="input" placeholder="e.g. Paris" />
-          </div>
-          <div>
-            <label className="label">Type</label>
-            <select value={filters.property_type} onChange={(e) => setFilters((f) => ({ ...f, property_type: e.target.value }))} className="input">
+            <label className="label">Property type</label>
+            <select
+              value={filters.property_type}
+              onChange={(e) => setFilters((f) => ({ ...f, property_type: e.target.value }))}
+              className="input"
+            >
               <option value="">Any</option>
               {PROPERTY_TYPES.map((t) => (
-                <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1).replace("_"," ")}</option>
+                <option key={t} value={t}>
+                  {t.charAt(0).toUpperCase() + t.slice(1).replace("_", " ")}
+                </option>
               ))}
             </select>
           </div>
           <div>
-            <label className="label">Min price $</label>
-            <input type="number" value={filters.min_price} onChange={(e) => setFilters((f) => ({ ...f, min_price: e.target.value }))} className="input" placeholder="0" />
+            <label className="label">Min price (₹)</label>
+            <input
+              type="number" value={filters.min_price}
+              onChange={(e) => setFilters((f) => ({ ...f, min_price: e.target.value }))}
+              className="input" placeholder="0"
+            />
           </div>
           <div>
-            <label className="label">Max price $</label>
-            <input type="number" value={filters.max_price} onChange={(e) => setFilters((f) => ({ ...f, max_price: e.target.value }))} className="input" placeholder="Any" />
+            <label className="label">Max price (₹)</label>
+            <input
+              type="number" value={filters.max_price}
+              onChange={(e) => setFilters((f) => ({ ...f, max_price: e.target.value }))}
+              className="input" placeholder="Any"
+            />
           </div>
           <div>
             <label className="label">Min guests</label>
-            <input type="number" min={1} value={filters.min_guests} onChange={(e) => setFilters((f) => ({ ...f, min_guests: e.target.value }))} className="input" placeholder="1" />
+            <input
+              type="number" min={1} value={filters.min_guests}
+              onChange={(e) => setFilters((f) => ({ ...f, min_guests: e.target.value }))}
+              className="input" placeholder="1"
+            />
           </div>
           <div className="flex items-end">
             <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={filters.allows_pets} onChange={(e) => setFilters((f) => ({ ...f, allows_pets: e.target.checked }))} className="w-4 h-4 accent-brand-600" />
+              <input
+                type="checkbox" checked={filters.allows_pets}
+                onChange={(e) => setFilters((f) => ({ ...f, allows_pets: e.target.checked }))}
+                className="w-4 h-4 accent-brand-600"
+              />
               <span className="text-sm font-medium text-gray-700">Pets OK</span>
             </label>
           </div>
-          <div className="col-span-full flex justify-end gap-2">
-            <button onClick={clearFilters} className="btn-ghost text-sm flex items-center gap-1">
+          <div className="flex items-end gap-2">
+            <button onClick={clearFilters} className="btn-ghost text-sm flex items-center gap-1 flex-1">
               <X className="w-3.5 h-3.5" /> Clear
             </button>
-            <button onClick={applyFilters} className="btn-primary text-sm">Apply</button>
+            <button onClick={applyFilters} className="btn-primary text-sm flex-1">Apply</button>
           </div>
         </div>
       )}
 
-      {/* Applied date badge */}
+      {/* Active date badge */}
       {(applied.check_in || applied.check_out) && (
         <div className="flex items-center gap-2 mb-4">
           <span className="badge bg-brand-100 text-brand-700 text-xs">
             {applied.check_in} → {applied.check_out}
           </span>
-          <button onClick={() => { setFilters((f) => ({...f,check_in:"",check_out:""})); setApplied((f) => ({...f,check_in:"",check_out:""})) }}
-            className="text-xs text-gray-400 hover:text-gray-600">
+          <button
+            onClick={() => {
+              setFilters((f) => ({ ...f, check_in: "", check_out: "" }))
+              setApplied((f) => ({ ...f, check_in: "", check_out: "" }))
+            }}
+            className="text-gray-400 hover:text-gray-600"
+          >
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
 
-      {/* Results count */}
-      <p className="text-sm text-gray-500 mb-5">
-        {isLoading ? "Searching…" : `${properties.length} place${properties.length !== 1 ? "s" : ""} found`}
-        {applied.check_in && ` available ${applied.check_in} → ${applied.check_out}`}
-      </p>
+      {/* Results header */}
+      <div className="flex items-center justify-between mb-5">
+        <p className="text-sm text-gray-500">
+          {isLoading
+            ? "Searching…"
+            : `${properties.length} place${properties.length !== 1 ? "s" : ""} found`}
+          {applied.city && ` in ${applied.city}`}
+          {applied.check_in && ` · ${applied.check_in} → ${applied.check_out}`}
+        </p>
+        {!locationDetected && !locationLoading && (
+          <button
+            onClick={() => {
+              setLocationLoading(true)
+              navigator.geolocation?.getCurrentPosition(
+                async (pos) => {
+                  try {
+                    const res = await fetch(
+                      `https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`,
+                      { headers: { "Accept-Language": "en" } }
+                    )
+                    const data = await res.json()
+                    const city = data.address?.city || data.address?.town || data.address?.village || ""
+                    if (city) {
+                      setLocationCity(city)
+                      setLocationDetected(true)
+                      setLocationBanner(true)
+                      const newFilters = { ...filters, city }
+                      setFilters(newFilters)
+                      setApplied(newFilters)
+                    }
+                  } catch {}
+                  setLocationLoading(false)
+                },
+                () => setLocationLoading(false)
+              )
+            }}
+            className="btn-ghost text-sm flex items-center gap-1.5 text-brand-600"
+          >
+            <Navigation className="w-3.5 h-3.5" />
+            Use my location
+          </button>
+        )}
+      </div>
 
       {/* Grid */}
       {isLoading ? (
@@ -217,12 +493,20 @@ export default function SearchPage() {
         <div className="card p-20 text-center">
           <Home className="w-10 h-10 mx-auto mb-3 text-gray-200" />
           <p className="font-medium text-gray-600">No properties found</p>
-          <p className="text-sm text-gray-400 mt-1">Try adjusting your dates or filters</p>
-          <button onClick={clearFilters} className="btn-secondary text-sm mt-5">Clear all filters</button>
+          <p className="text-sm text-gray-400 mt-1">
+            {applied.city
+              ? `No listings in ${applied.city} yet. Try a nearby city or clear filters.`
+              : "Try adjusting your search or filters"}
+          </p>
+          <button onClick={clearFilters} className="btn-secondary text-sm mt-5">
+            Clear all filters
+          </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-          {properties.map((p: Property) => <PropertyCard key={p.id} property={p} />)}
+          {properties.map((p: Property) => (
+            <PropertyCard key={p.id} property={p} />
+          ))}
         </div>
       )}
     </div>
