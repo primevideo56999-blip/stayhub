@@ -1,4 +1,5 @@
 "use client"
+import { Suspense } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -24,7 +25,8 @@ const schema = z.object({
 })
 type FormData = z.infer<typeof schema>
 
-export default function RegisterPage() {
+// ← split into inner component so useSearchParams is inside Suspense
+function RegisterForm() {
   const searchParams = useSearchParams()
   const defaultRole  = (searchParams.get("role") === "host" ? "host" : "guest") as "guest" | "host"
   const [loading, setLoading] = useState(false)
@@ -66,8 +68,6 @@ export default function RegisterPage() {
           <h1 className="font-display text-2xl font-bold text-gray-900">Create your account</h1>
           <p className="text-gray-500 text-sm mt-1">Join StayHub today</p>
         </div>
-
-        {/* Role toggle */}
         <div className="grid grid-cols-2 gap-3 mb-6">
           {(["guest", "host"] as const).map((r) => (
             <button
@@ -85,7 +85,6 @@ export default function RegisterPage() {
             </button>
           ))}
         </div>
-
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -99,41 +98,44 @@ export default function RegisterPage() {
               {errors.last_name && <p className="error-text">{errors.last_name.message}</p>}
             </div>
           </div>
-
           <div>
             <label className="label">Email</label>
             <input {...register("email")} type="email" className="input" placeholder="you@example.com" />
             {errors.email && <p className="error-text">{errors.email.message}</p>}
           </div>
-
           <div>
             <label className="label">Username</label>
             <input {...register("username")} className="input" placeholder="janedoe" />
             {errors.username && <p className="error-text">{errors.username.message}</p>}
           </div>
-
           <div>
             <label className="label">Password</label>
             <input {...register("password")} type="password" className="input" placeholder="Min. 8 characters" />
             {errors.password && <p className="error-text">{errors.password.message}</p>}
           </div>
-
           <div>
             <label className="label">Confirm password</label>
             <input {...register("password2")} type="password" className="input" placeholder="••••••••" />
             {errors.password2 && <p className="error-text">{errors.password2.message}</p>}
           </div>
-
           <button type="submit" disabled={loading} className="btn-primary w-full mt-2">
             {loading ? "Creating account…" : "Create account"}
           </button>
         </form>
-
         <p className="text-center text-sm text-gray-500 mt-6">
           Already have an account?{" "}
           <Link href="/login" className="text-brand-600 font-medium hover:underline">Sign in</Link>
         </p>
       </div>
     </div>
+  )
+}
+
+// ← default export wraps in Suspense
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading…</div>}>
+      <RegisterForm />
+    </Suspense>
   )
 }
