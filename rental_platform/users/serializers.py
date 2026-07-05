@@ -37,10 +37,14 @@ class UserSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "email", "role", "phone_verified", "is_verified", "created_at"]
 
-    def get_avatar(self, obj):  # add this
-        if obj.avatar:
-            return obj.avatar.url  # cloudinary returns full URL itself
-        return None
+    def get_avatar(self, obj):
+        if not obj.avatar:
+            return None
+        name = str(obj.avatar)  # raw stored value e.g. "avatars/IMG_3332"
+        # if already a full URL, return as-is
+        if name.startswith('http'):
+            return name
+        return f"https://res.cloudinary.com/cgtjcyy4/{name}"
 
 
 class HostProfileSerializer(serializers.ModelSerializer):

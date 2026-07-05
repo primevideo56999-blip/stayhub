@@ -121,7 +121,7 @@ CORS_ALLOW_ALL_ORIGINS = True
 
 # ── Cloudinary ────────────────────────────────────────────────────────────────
 CLOUDINARY_STORAGE = {
-    "CLOUD_NAME": os.environ.get("CLOUDINARY_CLOUD_NAME", ""),
+    "CLOUD_NAME": os.environ.get("CLOUDINARY_CLOUD_NAME", "cgtjcyy4"),
     "API_KEY":    os.environ.get("CLOUDINARY_API_KEY", ""),
     "API_SECRET": os.environ.get("CLOUDINARY_API_SECRET", ""),
 }

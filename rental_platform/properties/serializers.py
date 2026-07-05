@@ -17,10 +17,13 @@ class PropertyPhotoSerializer(serializers.ModelSerializer):
         fields = ["id", "image", "caption", "is_cover", "order", "uploaded_at"]
         read_only_fields = ["uploaded_at"]
 
-    def get_image(self, obj):  # add this
-        if obj.image:
-            return obj.image.url
-        return None
+    def get_image(self, obj):
+        if not obj.image:
+            return None
+        name = str(obj.image)
+        if name.startswith('http'):
+            return name
+        return f"https://res.cloudinary.com/cgtjcyy4/{name}"
 
 
 class PropertyAvailabilitySerializer(serializers.ModelSerializer):
@@ -46,9 +49,12 @@ class PropertyListSerializer(serializers.ModelSerializer):
 
     def get_cover_photo(self, obj):
         photo = obj.cover_photo
-        if photo and photo.image:
-            return photo.image.url  # cloudinary URL is already absolute
-        return None
+        if not photo or not photo.image:
+            return None
+        name = str(photo.image)
+        if name.startswith('http'):
+            return name
+        return f"https://res.cloudinary.com/cgtjcyy4/{name}"
 
 
 class PropertyDetailSerializer(serializers.ModelSerializer):
