@@ -26,14 +26,15 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.ReadOnlyField()
-    avatar = serializers.SerializerMethodField()  # add this
+    avatar = serializers.SerializerMethodField()
+    avatar_upload = serializers.ImageField(write_only=True, required=False, source='avatar')
 
     class Meta:
         model  = User
         fields = [
             "id", "email", "username", "first_name", "last_name",
             "full_name", "role", "phone", "phone_verified",
-            "avatar", "bio", "is_verified", "created_at",
+            "avatar", "avatar_upload", "bio", "is_verified", "created_at",
         ]
         read_only_fields = ["id", "email", "role", "phone_verified", "is_verified", "created_at"]
 
@@ -41,12 +42,10 @@ class UserSerializer(serializers.ModelSerializer):
         if not obj.avatar:
             return None
         url = str(obj.avatar.name if hasattr(obj.avatar, 'name') else obj.avatar)
-        # clean up any malformed URLs stored in DB
         if 'res.cloudinary.com' in url:
-            # extract just the public_id part after the cloud name
             parts = url.split('cgtjcyy4/')
             if len(parts) > 1:
-                path = parts[-1]  # e.g. "avatars/IMG_3332_kde50s"
+                path = parts[-1]
                 return f"https://res.cloudinary.com/cgtjcyy4/image/upload/{path}"
         return url
 
