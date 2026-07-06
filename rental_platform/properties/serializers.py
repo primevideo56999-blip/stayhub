@@ -21,12 +21,16 @@ class PropertyPhotoSerializer(serializers.ModelSerializer):
         if not obj.image:
             return None
         url = str(obj.image.name if hasattr(obj.image, 'name') else obj.image)
-        if 'res.cloudinary.com' in url:
-            parts = url.split('cgtjcyy4/')
-            if len(parts) > 1:
-                path = parts[-1]
-                return f"https://res.cloudinary.com/cgtjcyy4/image/upload/{path}"
-        return url
+        if url.startswith('http'):
+            if 'res.cloudinary.com' in url:
+                parts = url.split('cgtjcyy4/')
+                if len(parts) > 1:
+                    path = parts[-1]
+                    return f"https://res.cloudinary.com/cgtjcyy4/image/upload/{path}"
+            return url
+        import os
+        cloud = os.environ.get('CLOUDINARY_CLOUD_NAME', 'cgtjcyy4')
+        return f"https://res.cloudinary.com/{cloud}/image/upload/{url}"
 
 
 class PropertyAvailabilitySerializer(serializers.ModelSerializer):
@@ -55,12 +59,16 @@ class PropertyListSerializer(serializers.ModelSerializer):
         if not photo or not photo.image:
             return None
         url = str(photo.image.name if hasattr(photo.image, 'name') else photo.image)
-        if 'res.cloudinary.com' in url:
-            parts = url.split('cgtjcyy4/')
-            if len(parts) > 1:
-                path = parts[-1]
-                return f"https://res.cloudinary.com/cgtjcyy4/image/upload/{path}"
-        return url
+        if url.startswith('http'):
+            if 'res.cloudinary.com' in url:
+                parts = url.split('cgtjcyy4/')
+                if len(parts) > 1:
+                    path = parts[-1]
+                    return f"https://res.cloudinary.com/cgtjcyy4/image/upload/{path}"
+            return url
+        import os
+        cloud = os.environ.get('CLOUDINARY_CLOUD_NAME', 'cgtjcyy4')
+        return f"https://res.cloudinary.com/{cloud}/image/upload/{url}"
 
 class PropertyDetailSerializer(serializers.ModelSerializer):
     """Full detail — used on the property detail page."""

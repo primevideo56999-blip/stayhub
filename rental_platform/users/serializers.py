@@ -42,12 +42,18 @@ class UserSerializer(serializers.ModelSerializer):
         if not obj.avatar:
             return None
         url = str(obj.avatar.name if hasattr(obj.avatar, 'name') else obj.avatar)
-        if 'res.cloudinary.com' in url:
-            parts = url.split('cgtjcyy4/')
-            if len(parts) > 1:
-                path = parts[-1]
-                return f"https://res.cloudinary.com/cgtjcyy4/image/upload/{path}"
-        return url
+        # already a full URL
+        if url.startswith('http'):
+            if 'res.cloudinary.com' in url:
+                parts = url.split('cgtjcyy4/')
+                if len(parts) > 1:
+                    path = parts[-1]
+                    return f"https://res.cloudinary.com/cgtjcyy4/image/upload/{path}"
+            return url
+        # relative path — build full cloudinary URL
+        import os
+        cloud = os.environ.get('CLOUDINARY_CLOUD_NAME', 'cgtjcyy4')
+        return f"https://res.cloudinary.com/{cloud}/image/upload/{url}"
 
 class HostProfileSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
