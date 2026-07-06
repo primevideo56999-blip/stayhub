@@ -55,6 +55,7 @@ export function Navbar() {
                 <>
                   {link("/host/dashboard", "Dashboard")}
                   {link("/host/bookings", "Bookings")}
+                  {link("/host/calendar", "Calendar")}
                   {link("/host/analytics", "Analytics")}
                 </>
               )}
@@ -104,9 +105,10 @@ export function Navbar() {
             <>
               {isHost() && (
                 <>
-                  <Link href="/host/dashboard" className="block btn-ghost w-full text-left" onClick={() => setOpen(false)}>Dashboard</Link>
-                  <Link href="/host/bookings"  className="block btn-ghost w-full text-left" onClick={() => setOpen(false)}>Bookings</Link>
-                  <Link href="/host/analytics" className="block btn-ghost w-full text-left" onClick={() => setOpen(false)}>Analytics</Link>
+                  <Link href="/host/dashboard"      className="block btn-ghost w-full text-left" onClick={() => setOpen(false)}>Dashboard</Link>
+                  <Link href="/host/bookings"       className="block btn-ghost w-full text-left" onClick={() => setOpen(false)}>Bookings</Link>
+                  <Link href="/host/calendar"       className="block btn-ghost w-full text-left" onClick={() => setOpen(false)}>Calendar</Link>
+                  <Link href="/host/analytics"      className="block btn-ghost w-full text-left" onClick={() => setOpen(false)}>Analytics</Link>
                   <Link href="/host/properties/new" className="block btn-ghost w-full text-left" onClick={() => setOpen(false)}>Add listing</Link>
                 </>
               )}

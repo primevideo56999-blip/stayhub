@@ -86,7 +86,7 @@ function BookingRow({ booking }: { booking: Booking }) {
     <div className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-100">
       <div className="flex-1 min-w-0">
         <p className="font-medium text-gray-900 truncate">{booking.guest?.full_name}</p>
-        <p className="text-sm text-gray-500 truncate">{booking.listing?.title || booking.property?.title}</p>
+        <p className="text-sm text-gray-500 truncate">{booking?.property?.title}</p>
         <p className="text-xs text-gray-400 mt-0.5">
           {booking.check_in} → {booking.check_out} · {booking.nights} nights
         </p>
