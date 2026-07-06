@@ -10,11 +10,12 @@ class AmenitySerializer(serializers.ModelSerializer):
 
 
 class PropertyPhotoSerializer(serializers.ModelSerializer):
-    image = serializers.SerializerMethodField()  # add this
+    image = serializers.SerializerMethodField()
+    image_upload = serializers.ImageField(write_only=True, required=False, source='image')
 
     class Meta:
         model  = PropertyPhoto
-        fields = ["id", "image", "caption", "is_cover", "order", "uploaded_at"]
+        fields = ["id", "image", "image_upload", "caption", "is_cover", "order", "uploaded_at"]
         read_only_fields = ["uploaded_at"]
 
     def get_image(self, obj):
