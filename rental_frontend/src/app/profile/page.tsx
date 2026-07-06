@@ -45,7 +45,7 @@ export default function ProfilePage() {
     mutationFn: async (data: ProfileForm) => {
       const fd = new FormData()
       Object.entries(data).forEach(([k, v]) => v && fd.append(k, v))
-      if (avatar) fd.append("avatar", avatar)
+      if (avatar) fd.append("avatar_upload", avatar)
       return authApi.updateMeForm(fd)
     },
     onSuccess: async () => { await fetchMe(); toast.success("Profile updated!") },
