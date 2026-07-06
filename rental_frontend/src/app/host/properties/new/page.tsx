@@ -74,7 +74,7 @@ export default function NewPropertyPage() {
       // Upload all photos
       for (const photo of photos) {
         const fd = new FormData()
-        fd.append("image_upload", photo)
+        fd.append("image", photo)
         try { await propertiesApi.uploadPhoto(id, fd) } catch {}
       }
       setStep(5) // done step

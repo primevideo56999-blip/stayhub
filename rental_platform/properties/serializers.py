@@ -11,11 +11,10 @@ class AmenitySerializer(serializers.ModelSerializer):
 
 class PropertyPhotoSerializer(serializers.ModelSerializer):
     image = serializers.SerializerMethodField()
-    image_upload = serializers.ImageField(write_only=True, required=False, source='image')
 
     class Meta:
         model  = PropertyPhoto
-        fields = ["id", "image", "image_upload", "caption", "is_cover", "order", "uploaded_at"]
+        fields = ["id", "image", "caption", "is_cover", "order", "uploaded_at"]
         read_only_fields = ["uploaded_at"]
 
     def get_image(self, obj):
@@ -32,6 +31,15 @@ class PropertyPhotoSerializer(serializers.ModelSerializer):
         import os
         cloud = os.environ.get('CLOUDINARY_CLOUD_NAME', 'cgtjcyy4')
         return f"https://res.cloudinary.com/{cloud}/image/upload/{url}"
+
+    def create(self, validated_data):
+        request = self.context.get('request')
+        image_file = request.FILES.get('image_upload') or request.FILES.get('image')
+        instance = PropertyPhoto.objects.create(**validated_data)
+        if image_file:
+            instance.image = image_file
+            instance.save()
+        return instance
 
 
 class PropertyAvailabilitySerializer(serializers.ModelSerializer):
