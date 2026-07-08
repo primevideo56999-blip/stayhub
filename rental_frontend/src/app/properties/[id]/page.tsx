@@ -2,16 +2,96 @@
 import { useQuery, useMutation } from "@tanstack/react-query"
 import { propertiesApi, bookingsApi, reviewsApi } from "@/lib/api"
 import { useParams, useRouter } from "next/navigation"
-import { useState } from "react"
-import { Star, Users, Bed, Bath, MapPin, ChevronLeft, Heart, Share2, Wifi } from "lucide-react"
+import { useState, useEffect, useCallback } from "react"
+import { Star, Users, Bed, Bath, MapPin, ChevronLeft, ChevronRight, Heart, Share2, Wifi, X } from "lucide-react"
 import Link from "next/link"
 import { useAuthStore } from "@/store/auth"
 import toast from "react-hot-toast"
 import { ReviewsResponse, Property, PropertyPhoto } from "@/types"
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 const INR = (amount: string | number) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(amount))
+
+// ── Lightbox ──────────────────────────────────────────────────────────────────
+function Lightbox({ photos, initialIndex, onClose }: {
+  photos: PropertyPhoto[]
+  initialIndex: number
+  onClose: () => void
+}) {
+  const [current, setCurrent] = useState(initialIndex)
+
+  const prev = useCallback(() => setCurrent((c) => (c - 1 + photos.length) % photos.length), [photos.length])
+  const next = useCallback(() => setCurrent((c) => (c + 1) % photos.length), [photos.length])
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft")  prev()
+      if (e.key === "ArrowRight") next()
+      if (e.key === "Escape")     onClose()
+    }
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
+  }, [prev, next, onClose])
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center" onClick={onClose}>
+      {/* Close */}
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-full p-2 transition z-10"
+      >
+        <X className="w-6 h-6" />
+      </button>
+
+      {/* Counter */}
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 text-white/70 text-sm">
+        {current + 1} / {photos.length}
+      </div>
+
+      {/* Prev */}
+      <button
+        onClick={(e) => { e.stopPropagation(); prev() }}
+        className="absolute left-4 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-full p-3 transition z-10"
+      >
+        <ChevronLeft className="w-6 h-6" />
+      </button>
+
+      {/* Image */}
+      <div className="max-w-5xl max-h-[85vh] px-20" onClick={(e) => e.stopPropagation()}>
+        <img
+          src={photos[current]?.image}
+          alt={`Photo ${current + 1}`}
+          className="max-w-full max-h-[85vh] object-contain rounded-xl"
+        />
+      </div>
+
+      {/* Next */}
+      <button
+        onClick={(e) => { e.stopPropagation(); next() }}
+        className="absolute right-4 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-full p-3 transition z-10"
+      >
+        <ChevronRight className="w-6 h-6" />
+      </button>
+
+      {/* Thumbnails */}
+      {photos.length > 1 && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 overflow-x-auto max-w-lg px-4">
+          {photos.map((p, i) => (
+            <button
+              key={p.id}
+              onClick={(e) => { e.stopPropagation(); setCurrent(i) }}
+              className={`flex-shrink-0 w-14 h-14 rounded-lg overflow-hidden border-2 transition ${
+                i === current ? "border-white" : "border-transparent opacity-60 hover:opacity-100"
+              }`}
+            >
+              <img src={p.image} alt="" className="w-full h-full object-cover" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function PropertyDetailPage() {
   const { id }   = useParams<{ id: string }>()
@@ -22,7 +102,7 @@ export default function PropertyDetailPage() {
   const [checkOut, setCheckOut] = useState("")
   const [guests,   setGuests]   = useState(1)
   const [preview,  setPreview]  = useState<any>(null)
-  const [activePhoto, setActivePhoto] = useState(0)
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
 
   const today = new Date().toISOString().split("T")[0]
 
@@ -60,15 +140,10 @@ export default function PropertyDetailPage() {
     onError:   (e: any) => toast.error(e?.response?.data?.detail || "Booking failed. Please try again."),
   })
 
-  // ── Loading ───────────────────────────────────────────────────────────────
   if (isLoading) return (
     <div className="max-w-5xl mx-auto px-4 py-10 animate-pulse space-y-4">
       <div className="h-10 bg-gray-200 rounded w-2/3" />
       <div className="h-80 bg-gray-200 rounded-2xl" />
-      <div className="grid grid-cols-3 gap-4">
-        <div className="h-6 bg-gray-200 rounded col-span-2" />
-        <div className="h-6 bg-gray-200 rounded" />
-      </div>
     </div>
   )
 
@@ -80,12 +155,18 @@ export default function PropertyDetailPage() {
   )
 
   const photos: PropertyPhoto[] = property.photos || []
-  const nights = checkIn && checkOut
-    ? Math.max(0, (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000)
-    : 0
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+      {/* Lightbox */}
+      {lightboxIndex !== null && (
+        <Lightbox
+          photos={photos}
+          initialIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+        />
+      )}
 
       {/* Back */}
       <Link href="/search" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800 mb-4">
@@ -125,15 +206,18 @@ export default function PropertyDetailPage() {
         <div className="mb-8">
           <div className="grid grid-cols-4 grid-rows-2 gap-2 rounded-2xl overflow-hidden h-80">
             {/* Main photo */}
-            <div className="col-span-2 row-span-2 cursor-pointer" onClick={() => setActivePhoto(0)}>
+            <div className="col-span-2 row-span-2 cursor-pointer relative group" onClick={() => setLightboxIndex(0)}>
               <img src={photos[0]?.image} alt={property.title}
-                className="w-full h-full object-cover hover:brightness-95 transition" />
+                className="w-full h-full object-cover group-hover:brightness-90 transition" />
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                <span className="bg-black/50 text-white text-xs px-3 py-1.5 rounded-full">View photos</span>
+              </div>
             </div>
             {/* Side photos */}
             {photos.slice(1, 5).map((photo, i) => (
-              <div key={photo.id} className="cursor-pointer relative" onClick={() => setActivePhoto(i + 1)}>
+              <div key={photo.id} className="cursor-pointer relative group" onClick={() => setLightboxIndex(i + 1)}>
                 <img src={photo.image} alt=""
-                  className="w-full h-full object-cover hover:brightness-95 transition" />
+                  className="w-full h-full object-cover group-hover:brightness-90 transition" />
                 {i === 3 && photos.length > 5 && (
                   <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                     <span className="text-white font-semibold text-sm">+{photos.length - 5} more</span>
@@ -141,11 +225,17 @@ export default function PropertyDetailPage() {
                 )}
               </div>
             ))}
-            {/* Fill empty slots */}
             {photos.length < 5 && [...Array(5 - photos.length)].map((_, i) => (
               <div key={`empty-${i}`} className="bg-gray-100" />
             ))}
           </div>
+          {/* Show all photos button */}
+          <button
+            onClick={() => setLightboxIndex(0)}
+            className="mt-2 text-sm text-gray-600 underline hover:text-gray-900"
+          >
+            Show all {photos.length} photo{photos.length !== 1 ? "s" : ""}
+          </button>
         </div>
       ) : (
         <div className="h-80 bg-gray-100 rounded-2xl flex items-center justify-center mb-8">
@@ -154,11 +244,8 @@ export default function PropertyDetailPage() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-
         {/* ── Left: Details ───────────────────────────────────────────────── */}
         <div className="lg:col-span-2 space-y-8">
-
-          {/* Key stats */}
           <div className="flex items-center gap-6 pb-6 border-b border-gray-100">
             <div className="flex items-center gap-2 text-gray-600">
               <Users className="w-5 h-5 text-brand-400" />
@@ -178,7 +265,6 @@ export default function PropertyDetailPage() {
             </div>
           </div>
 
-          {/* Host info */}
           {property.host && (
             <div className="flex items-center gap-4 pb-6 border-b border-gray-100">
               <div className="w-12 h-12 rounded-full bg-brand-100 overflow-hidden flex-shrink-0">
@@ -190,23 +276,17 @@ export default function PropertyDetailPage() {
                 }
               </div>
               <div>
-                <p className="font-semibold text-gray-900">
-                  Hosted by {property.host.first_name} {property.host.last_name}
-                </p>
-                {property.host.bio && (
-                  <p className="text-sm text-gray-500 line-clamp-2 mt-0.5">{property.host.bio}</p>
-                )}
+                <p className="font-semibold text-gray-900">Hosted by {property.host.first_name} {property.host.last_name}</p>
+                {property.host.bio && <p className="text-sm text-gray-500 line-clamp-2 mt-0.5">{property.host.bio}</p>}
               </div>
             </div>
           )}
 
-          {/* Description */}
           <div>
             <h2 className="font-display font-semibold text-xl text-gray-900 mb-3">About this place</h2>
             <p className="text-gray-600 leading-relaxed whitespace-pre-line">{property.description}</p>
           </div>
 
-          {/* Amenities */}
           {property.amenities?.length > 0 && (
             <div>
               <h2 className="font-display font-semibold text-xl text-gray-900 mb-4">What this place offers</h2>
@@ -221,41 +301,26 @@ export default function PropertyDetailPage() {
             </div>
           )}
 
-          {/* House rules */}
           {property.house_rules && (
             <div>
               <h2 className="font-display font-semibold text-xl text-gray-900 mb-3">House rules</h2>
               <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-line">{property.house_rules}</p>
               <div className="flex gap-4 mt-3 text-sm">
-                <span className={`flex items-center gap-1 ${property.allows_pets ? "text-green-600" : "text-gray-400 line-through"}`}>
-                  🐾 Pets {property.allows_pets ? "allowed" : "not allowed"}
-                </span>
-                <span className={`flex items-center gap-1 ${property.allows_smoking ? "text-green-600" : "text-gray-400 line-through"}`}>
-                  🚬 Smoking {property.allows_smoking ? "allowed" : "not allowed"}
-                </span>
-                <span className={`flex items-center gap-1 ${property.allows_parties ? "text-green-600" : "text-gray-400 line-through"}`}>
-                  🎉 Parties {property.allows_parties ? "allowed" : "not allowed"}
-                </span>
+                <span className={`flex items-center gap-1 ${property.allows_pets ? "text-green-600" : "text-gray-400 line-through"}`}>🐾 Pets {property.allows_pets ? "allowed" : "not allowed"}</span>
+                <span className={`flex items-center gap-1 ${property.allows_smoking ? "text-green-600" : "text-gray-400 line-through"}`}>🚬 Smoking {property.allows_smoking ? "allowed" : "not allowed"}</span>
+                <span className={`flex items-center gap-1 ${property.allows_parties ? "text-green-600" : "text-gray-400 line-through"}`}>🎉 Parties {property.allows_parties ? "allowed" : "not allowed"}</span>
               </div>
             </div>
           )}
 
-          {/* Reviews */}
           {reviews && reviews.count > 0 && (
             <div>
               <h2 className="font-display font-semibold text-xl text-gray-900 mb-2 flex items-center gap-2">
                 <Star className="w-5 h-5 fill-amber-400 text-amber-400" />
                 {parseFloat(property.avg_rating).toFixed(1)} · {reviews.count} review{reviews.count !== 1 ? "s" : ""}
               </h2>
-
-              {/* Rating breakdown */}
               <div className="grid grid-cols-2 gap-x-8 gap-y-2 mb-6 text-sm">
-                {[
-                  ["Cleanliness",   reviews.ratings.avg_cleanliness],
-                  ["Communication", reviews.ratings.avg_communication],
-                  ["Location",      reviews.ratings.avg_location],
-                  ["Value",         reviews.ratings.avg_value],
-                ].map(([label, val]) => (
+                {[["Cleanliness", reviews.ratings.avg_cleanliness], ["Communication", reviews.ratings.avg_communication], ["Location", reviews.ratings.avg_location], ["Value", reviews.ratings.avg_value]].map(([label, val]) => (
                   <div key={label as string} className="flex items-center gap-3">
                     <span className="text-gray-600 w-28">{label}</span>
                     <div className="flex-1 bg-gray-200 rounded-full h-1.5">
@@ -265,8 +330,6 @@ export default function PropertyDetailPage() {
                   </div>
                 ))}
               </div>
-
-              {/* Review list */}
               <div className="space-y-5">
                 {reviews.results.slice(0, 4).map((r) => (
                   <div key={r.id} className="border-b border-gray-100 pb-5 last:border-0">
@@ -295,7 +358,6 @@ export default function PropertyDetailPage() {
             </div>
           )}
 
-          {/* Location */}
           <div>
             <h2 className="font-display font-semibold text-xl text-gray-900 mb-2">Location</h2>
             <p className="text-gray-600 text-sm">
@@ -303,8 +365,7 @@ export default function PropertyDetailPage() {
               {property.city}, {property.state} {property.postal_code}, {property.country}
             </p>
             <div className="mt-3 h-48 bg-gray-100 rounded-2xl flex items-center justify-center text-gray-400 text-sm">
-              <MapPin className="w-5 h-5 mr-2" />
-              {property.city}, {property.country}
+              <MapPin className="w-5 h-5 mr-2" />{property.city}, {property.country}
             </div>
           </div>
         </div>
@@ -313,9 +374,7 @@ export default function PropertyDetailPage() {
         <div>
           <div className="card p-6 sticky top-20">
             <div className="flex items-baseline gap-1 mb-1">
-              <span className="font-display text-2xl font-bold text-gray-900">
-                {INR(property.price_per_night)}
-              </span>
+              <span className="font-display text-2xl font-bold text-gray-900">{INR(property.price_per_night)}</span>
               <span className="text-gray-500 text-sm">/ night</span>
             </div>
             {parseFloat(property.avg_rating) > 0 && (
@@ -324,7 +383,6 @@ export default function PropertyDetailPage() {
                 {parseFloat(property.avg_rating).toFixed(1)} · {property.total_reviews} review{property.total_reviews !== 1 ? "s" : ""}
               </p>
             )}
-
             <div className="border border-gray-200 rounded-xl overflow-hidden mb-4">
               <div className="grid grid-cols-2 divide-x divide-gray-200">
                 <div className="p-3">
@@ -350,16 +408,12 @@ export default function PropertyDetailPage() {
                 </select>
               </div>
             </div>
-
-            {/* Price preview */}
             {checkIn && checkOut && !preview && (
-              <button onClick={() => previewMutation.mutate()}
-                disabled={previewMutation.isPending}
+              <button onClick={() => previewMutation.mutate()} disabled={previewMutation.isPending}
                 className="btn-secondary w-full text-sm mb-3">
                 {previewMutation.isPending ? "Calculating…" : "Check price"}
               </button>
             )}
-
             {preview && (
               <div className="bg-gray-50 rounded-xl p-4 mb-4 space-y-2 text-sm">
                 <div className="flex justify-between text-gray-600">
@@ -367,20 +421,16 @@ export default function PropertyDetailPage() {
                   <span>{INR(preview.subtotal)}</span>
                 </div>
                 {parseFloat(preview.cleaning_fee) > 0 && (
-                  <div className="flex justify-between text-gray-600">
-                    <span>Cleaning fee</span><span>{INR(preview.cleaning_fee)}</span>
-                  </div>
+                  <div className="flex justify-between text-gray-600"><span>Cleaning fee</span><span>{INR(preview.cleaning_fee)}</span></div>
                 )}
                 <div className="flex justify-between text-gray-600">
-                  <span>Service fee ({preview.service_fee_pct}%)</span>
-                  <span>{INR(preview.service_fee)}</span>
+                  <span>Service fee ({preview.service_fee_pct}%)</span><span>{INR(preview.service_fee)}</span>
                 </div>
                 <div className="flex justify-between font-bold text-gray-900 pt-2 border-t border-gray-200">
                   <span>Total</span><span>{INR(preview.total)}</span>
                 </div>
               </div>
             )}
-
             <button
               onClick={() => {
                 if (!isAuthenticated()) { toast.error("Please log in to book"); router.push("/login"); return }
@@ -392,22 +442,11 @@ export default function PropertyDetailPage() {
             >
               {bookMutation.isPending ? "Requesting…" : checkIn && checkOut ? "Request to book" : "Check availability"}
             </button>
-
-            <p className="text-xs text-center text-gray-400 mt-3">
-              You won't be charged until the host accepts
-            </p>
-
-            {/* Min/max nights info */}
+            <p className="text-xs text-center text-gray-400 mt-3">You won't be charged until the host accepts</p>
             <div className="mt-4 pt-4 border-t border-gray-100 space-y-1 text-xs text-gray-500">
-              <div className="flex justify-between">
-                <span>Min. stay</span><span>{property.min_nights} night{property.min_nights !== 1 ? "s" : ""}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Check-in</span><span>from {property.check_in_time}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Check-out</span><span>by {property.check_out_time}</span>
-              </div>
+              <div className="flex justify-between"><span>Min. stay</span><span>{property.min_nights} night{property.min_nights !== 1 ? "s" : ""}</span></div>
+              <div className="flex justify-between"><span>Check-in</span><span>from {property.check_in_time}</span></div>
+              <div className="flex justify-between"><span>Check-out</span><span>by {property.check_out_time}</span></div>
             </div>
           </div>
         </div>
