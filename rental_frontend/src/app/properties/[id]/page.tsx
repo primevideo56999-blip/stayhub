@@ -8,6 +8,7 @@ import Link from "next/link"
 import { useAuthStore } from "@/store/auth"
 import toast from "react-hot-toast"
 import { ReviewsResponse, Property, PropertyPhoto } from "@/types"
+import { ChatButton } from "@/components/chat/ChatButton"
 
 const INR = (amount: string | number) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(amount))
@@ -442,6 +443,12 @@ export default function PropertyDetailPage() {
             >
               {bookMutation.isPending ? "Requesting…" : checkIn && checkOut ? "Request to book" : "Check availability"}
             </button>
+
+            <ChatButton
+              propertyId={property.id}
+              hostName={property.host.first_name}
+              className="w-full mt-2"
+            />
             <p className="text-xs text-center text-gray-400 mt-3">You won't be charged until the host accepts</p>
             <div className="mt-4 pt-4 border-t border-gray-100 space-y-1 text-xs text-gray-500">
               <div className="flex justify-between"><span>Min. stay</span><span>{property.min_nights} night{property.min_nights !== 1 ? "s" : ""}</span></div>

@@ -38,7 +38,9 @@ LOCAL_APPS = [
     "reviews",
     "notifications",
     "wishlist",
-    "analytics"
+    "analytics",
+    "channels",
+    "chat"
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -192,4 +194,11 @@ CELERY_BEAT_SCHEDULE = {
         "task":     "notifications.tasks_scheduled.send_review_reminders",
         "schedule": crontab(hour=10, minute=0),
     },
+}
+ASGI_APPLICATION = "core.asgi.application"
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG":  {"hosts": [("redis", 6379)]},
+    }
 }

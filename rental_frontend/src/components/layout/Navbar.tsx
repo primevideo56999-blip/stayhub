@@ -57,6 +57,7 @@ export function Navbar() {
                   {link("/host/bookings", "Bookings")}
                   {link("/host/calendar", "Calendar")}
                   {link("/host/analytics", "Analytics")}
+                  {link("/chat", "Messages")}
                 </>
               )}
               {!isHost() && (
