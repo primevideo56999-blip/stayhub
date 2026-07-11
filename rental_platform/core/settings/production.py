@@ -41,6 +41,8 @@ LOCAL_APPS = [
     "notifications",
     "wishlist",
     "analytics",
+    "channels",
+    "chat"
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
