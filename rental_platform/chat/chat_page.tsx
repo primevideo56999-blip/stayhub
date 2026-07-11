@@ -25,7 +25,10 @@ export default function ChatPage() {
 
   const { data: conversations = [], isLoading } = useQuery({
     queryKey: ["conversations"],
-    queryFn:  () => api.get("/chat/conversations/").then((r) => r.data),
+    queryFn: () => api.get("/chat/conversations/").then((r) => {
+      const data = r.data
+      return Array.isArray(data) ? data : (data.results || [])
+    }),
     enabled:  isAuthenticated(),
     refetchInterval: 10000, // poll every 10s for new convos
   })
