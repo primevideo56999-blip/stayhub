@@ -19,8 +19,6 @@ class Conversation(models.Model):
     def __str__(self):
         return f"{self.guest.email} ↔ {self.host.email} re: {self.property.title}"
 
-    @property
-    def other_user(self, current_user):
         return self.host if current_user == self.guest else self.guest
 
 
