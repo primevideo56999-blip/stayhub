@@ -1,10 +1,11 @@
 "use client"
+import { Suspense } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/api"
 import { useAuthStore } from "@/store/auth"
 import { ChatWindow } from "@/components/chat/ChatWindow"
 import { useState, useEffect } from "react"
-import { MessageCircle, Search } from "lucide-react"
+import { MessageCircle, Search, Loader2 } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 
 interface Conversation {
@@ -17,7 +18,8 @@ interface Conversation {
   updated_at:   string
 }
 
-export default function ChatPage() {
+// ── Inner component uses useSearchParams — must be inside Suspense ────────────
+function ChatPageInner() {
   const { user, isAuthenticated } = useAuthStore()
   const router       = useRouter()
   const searchParams = useSearchParams()
@@ -37,7 +39,7 @@ export default function ChatPage() {
     refetchInterval: 10000,
   })
 
-  // Handle both array response and paginated {results: [...]} response
+  // Handle both array and paginated {results:[...]} response
   const conversations: Conversation[] = Array.isArray(rawData)
     ? rawData
     : (rawData?.results ?? [])
@@ -95,9 +97,7 @@ export default function ChatPage() {
               <div className="card p-8 text-center text-gray-400">
                 <MessageCircle className="w-8 h-8 mx-auto mb-2 opacity-40" />
                 <p className="text-sm">No conversations yet</p>
-                <p className="text-xs mt-1 text-gray-300">
-                  Start a chat from any property page
-                </p>
+                <p className="text-xs mt-1 text-gray-300">Start a chat from any property page</p>
               </div>
             ) : (
               filtered.map((conv) => {
@@ -150,9 +150,7 @@ export default function ChatPage() {
                         </p>
                         {conv.last_message && (
                           <p className={`text-xs truncate mt-0.5 ${
-                            conv.unread_count > 0
-                              ? "font-medium text-gray-700"
-                              : "text-gray-400"
+                            conv.unread_count > 0 ? "font-medium text-gray-700" : "text-gray-400"
                           }`}>
                             {conv.last_message.sender_id === user?.id ? "You: " : ""}
                             {conv.last_message.body}
@@ -189,5 +187,19 @@ export default function ChatPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// ── Default export wraps inner component in Suspense ─────────────────────────
+// Required because useSearchParams() causes prerender errors in Next.js
+export default function ChatPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
+        <Loader2 className="w-8 h-8 text-gray-300 animate-spin" />
+      </div>
+    }>
+      <ChatPageInner />
+    </Suspense>
   )
 }
