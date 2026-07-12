@@ -83,6 +83,15 @@ class BookingViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="my-trips")
     def my_trips(self, request):
+        today = timezone.now().date()
+        # Auto-complete confirmed bookings whose checkout has passed
+        Booking.objects.filter(
+            guest=request.user,
+            status=Booking.Status.CONFIRMED,
+            check_out__lte=today,
+            is_active=True,
+        ).update(status=Booking.Status.COMPLETED)
+
         qs = Booking.objects.filter(guest=request.user, is_active=True).order_by("-created_at")
         status_filter = request.query_params.get("status")
         if status_filter:
