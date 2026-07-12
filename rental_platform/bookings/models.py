@@ -64,10 +64,13 @@ class Booking(models.Model):
 
     def clean(self):
         errors = {}
+
         if self.check_in >= self.check_out:
             errors["check_out"] = "Check-out must be after check-in."
+
         if self.check_in < timezone.now().date():
             errors["check_in"] = "Check-in cannot be in the past."
+
         nights = (self.check_out - self.check_in).days
         if nights < self.listing.min_nights:
             errors["check_in"] = f"Minimum stay is {self.listing.min_nights} night(s)."
@@ -75,23 +78,36 @@ class Booking(models.Model):
             errors["check_in"] = f"Maximum stay is {self.listing.max_nights} night(s)."
         if self.num_guests > self.listing.max_guests:
             errors["num_guests"] = f"Max guests allowed is {self.listing.max_guests}."
+
         if errors:
             raise ValidationError(errors)
-        overlapping = Booking.objects.filter(
+
+        # ── KEY CHANGE: only block if there's a CONFIRMED booking on these dates ──
+        # Multiple PENDING bookings on same dates are allowed
+        # Only one CONFIRMED booking can exist per date range
+        overlapping_confirmed = Booking.objects.filter(
             listing=self.listing,
-            status__in=[Booking.Status.CONFIRMED, Booking.Status.PENDING],
+            status=Booking.Status.CONFIRMED,   # only confirmed blocks new bookings
             check_in__lt=self.check_out,
             check_out__gt=self.check_in,
             is_active=True,
         ).exclude(pk=self.pk)
-        if overlapping.exists():
-            raise ValidationError({"check_in": "These dates are not available."})
-        blocked = PropertyAvailability.objects.filter(
+
+        if overlapping_confirmed.exists():
+            raise ValidationError({
+                "check_in": "These dates are already booked. Please choose different dates."
+            })
+
+        # Also block dates that host manually blocked (not booked ones)
+        host_blocked = PropertyAvailability.objects.filter(
             property=self.listing,
             date__range=[self.check_in, self.check_out - timedelta(days=1)],
+            reason=PropertyAvailability.BlockReason.HOST_BLOCK,  # only host blocks, not booked
         )
-        if blocked.exists():
-            raise ValidationError({"check_in": "One or more selected dates are blocked."})
+        if host_blocked.exists():
+            raise ValidationError({
+                "check_in": "One or more selected dates are blocked by the host."
+            })
 
     def save(self, *args, **kwargs):
         self.nights = (self.check_out - self.check_in).days
@@ -114,6 +130,21 @@ class Booking(models.Model):
     def confirm(self):
         if self.status != self.Status.PENDING:
             raise ValueError("Only pending bookings can be confirmed.")
+
+        # ── When confirming, reject all other pending bookings for same dates ──
+        overlapping_pending = Booking.objects.filter(
+            listing=self.listing,
+            status=self.Status.PENDING,
+            check_in__lt=self.check_out,
+            check_out__gt=self.check_in,
+            is_active=True,
+        ).exclude(pk=self.pk)
+
+        for b in overlapping_pending:
+            b.status = self.Status.REJECTED
+            b.cancellation_reason = "Another booking was confirmed for these dates."
+            b.save(update_fields=["status", "cancellation_reason", "updated_at"])
+
         self.status = self.Status.CONFIRMED
         self.save(update_fields=["status", "updated_at"])
         self._block_dates()
@@ -141,6 +172,7 @@ class Booking(models.Model):
         self.save(update_fields=["status", "updated_at"])
 
     def _block_dates(self):
+        """Block dates ONLY after confirmation."""
         current = self.check_in
         while current < self.check_out:
             PropertyAvailability.objects.get_or_create(
@@ -151,6 +183,7 @@ class Booking(models.Model):
             current += timedelta(days=1)
 
     def _unblock_dates(self):
+        """Release booked dates when booking is cancelled."""
         PropertyAvailability.objects.filter(
             property=self.listing,
             date__range=[self.check_in, self.check_out - timedelta(days=1)],

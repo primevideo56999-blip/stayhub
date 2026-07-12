@@ -3,9 +3,9 @@ import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/api"
 import { useAuthStore } from "@/store/auth"
 import { ChatWindow } from "@/components/chat/ChatWindow"
-import { useState } from "react"
-import { MessageCircle, Home, Search } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
+import { MessageCircle, Search } from "lucide-react"
+import { useRouter, useSearchParams } from "next/navigation"
 
 interface Conversation {
   id:           number
@@ -19,34 +19,48 @@ interface Conversation {
 
 export default function ChatPage() {
   const { user, isAuthenticated } = useAuthStore()
-  const router = useRouter()
+  const router       = useRouter()
+  const searchParams = useSearchParams()
   const [activeConvId, setActiveConvId] = useState<number | null>(null)
   const [search, setSearch] = useState("")
 
-  const { data: conversations = [], isLoading } = useQuery({
+  // Auto-open conversation if ?conversation=ID in URL
+  useEffect(() => {
+    const convId = searchParams.get("conversation")
+    if (convId) setActiveConvId(Number(convId))
+  }, [searchParams])
+
+  const { data: rawData, isLoading } = useQuery({
     queryKey: ["conversations"],
     queryFn:  () => api.get("/chat/conversations/").then((r) => r.data),
     enabled:  isAuthenticated(),
-    refetchInterval: 10000, // poll every 10s for new convos
+    refetchInterval: 10000,
   })
+
+  // Handle both array response and paginated {results: [...]} response
+  const conversations: Conversation[] = Array.isArray(rawData)
+    ? rawData
+    : (rawData?.results ?? [])
 
   if (!isAuthenticated()) {
     return (
       <div className="max-w-md mx-auto px-4 py-20 text-center">
         <MessageCircle className="w-12 h-12 text-gray-200 mx-auto mb-4" />
         <h2 className="font-display text-xl font-bold text-gray-900 mb-2">Log in to chat</h2>
-        <p className="text-gray-500 text-sm mb-6">You need to be logged in to send and receive messages.</p>
+        <p className="text-gray-500 text-sm mb-6">
+          You need to be logged in to send and receive messages.
+        </p>
         <button onClick={() => router.push("/login")} className="btn-primary">Log in</button>
       </div>
     )
   }
 
-  const activeConv = conversations.find((c: Conversation) => c.id === activeConvId)
+  const activeConv = conversations.find((c) => c.id === activeConvId)
   const otherUser  = activeConv
     ? (user?.id === activeConv.guest.id ? activeConv.host : activeConv.guest)
     : null
 
-  const filtered = conversations.filter((c: Conversation) => {
+  const filtered = conversations.filter((c) => {
     const other = user?.id === c.guest.id ? c.host : c.guest
     return (
       other.full_name.toLowerCase().includes(search.toLowerCase()) ||
@@ -56,15 +70,12 @@ export default function ChatPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="font-display text-2xl font-bold text-gray-900">Messages</h1>
-      </div>
+      <h1 className="font-display text-2xl font-bold text-gray-900 mb-6">Messages</h1>
 
       <div className="flex gap-4 h-[calc(100vh-12rem)]">
 
-        {/* ── Sidebar: conversation list ─────────────────────────────── */}
+        {/* ── Sidebar ───────────────────────────────────────────────── */}
         <div className="w-80 flex-shrink-0 flex flex-col gap-3">
-          {/* Search */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
@@ -75,10 +86,9 @@ export default function ChatPage() {
             />
           </div>
 
-          {/* List */}
           <div className="flex-1 overflow-y-auto space-y-1">
             {isLoading ? (
-              [...Array(4)].map((_, i) => (
+              [...Array(3)].map((_, i) => (
                 <div key={i} className="card p-4 h-20 animate-pulse bg-gray-100" />
               ))
             ) : filtered.length === 0 ? (
@@ -90,12 +100,12 @@ export default function ChatPage() {
                 </p>
               </div>
             ) : (
-              filtered.map((conv: Conversation) => {
-                const other   = user?.id === conv.guest.id ? conv.host : conv.guest
+              filtered.map((conv) => {
+                const other    = user?.id === conv.guest.id ? conv.host : conv.guest
                 const isActive = conv.id === activeConvId
-                const timeAgo  = conv.last_message
+                const timeStr  = conv.last_message
                   ? new Date(conv.last_message.created_at).toLocaleTimeString("en-IN", {
-                      hour: "2-digit", minute: "2-digit"
+                      hour: "2-digit", minute: "2-digit",
                     })
                   : ""
 
@@ -121,7 +131,9 @@ export default function ChatPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1">
-                          <p className={`text-sm font-semibold truncate ${isActive ? "text-brand-700" : "text-gray-900"}`}>
+                          <p className={`text-sm font-semibold truncate ${
+                            isActive ? "text-brand-700" : "text-gray-900"
+                          }`}>
                             {other.full_name}
                           </p>
                           <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -130,12 +142,18 @@ export default function ChatPage() {
                                 {conv.unread_count > 9 ? "9+" : conv.unread_count}
                               </span>
                             )}
-                            <span className="text-xs text-gray-400">{timeAgo}</span>
+                            <span className="text-xs text-gray-400">{timeStr}</span>
                           </div>
                         </div>
-                        <p className="text-xs text-gray-500 truncate mt-0.5">{conv.property.title}</p>
+                        <p className="text-xs text-gray-500 truncate mt-0.5">
+                          {conv.property.title}
+                        </p>
                         {conv.last_message && (
-                          <p className={`text-xs truncate mt-0.5 ${conv.unread_count > 0 ? "font-medium text-gray-700" : "text-gray-400"}`}>
+                          <p className={`text-xs truncate mt-0.5 ${
+                            conv.unread_count > 0
+                              ? "font-medium text-gray-700"
+                              : "text-gray-400"
+                          }`}>
                             {conv.last_message.sender_id === user?.id ? "You: " : ""}
                             {conv.last_message.body}
                           </p>
@@ -149,7 +167,7 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* ── Main: chat window ──────────────────────────────────────── */}
+        {/* ── Chat window ───────────────────────────────────────────── */}
         <div className="flex-1 min-w-0">
           {activeConvId && otherUser ? (
             <ChatWindow
