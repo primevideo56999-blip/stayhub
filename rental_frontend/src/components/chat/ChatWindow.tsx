@@ -1,6 +1,6 @@
 "use client"
-import { useState, useEffect, useRef } from "react"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useState, useEffect, useRef, useCallback } from "react"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/lib/api"
 import { useAuthStore } from "@/store/auth"
 import { Send, Loader2, Lock, RefreshCw } from "lucide-react"
@@ -8,62 +8,84 @@ import { useRouter } from "next/navigation"
 import toast from "react-hot-toast"
 
 interface Message {
-  id:            number
-  body:          string
-  sender:        { id: number; full_name: string; avatar: string | null }
-  is_read:       boolean
-  created_at:    string
+  id:         number
+  body:       string
+  sender:     { id: number; full_name: string; avatar: string | null }
+  is_read:    boolean
+  created_at: string
 }
 
 interface Props {
-  conversationId: number
-  otherUserName:  string
+  conversationId:  number
+  otherUserName:   string
   otherUserAvatar?: string | null
 }
-
-const INR_TIME = (iso: string) =>
-  new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
 
 export function ChatWindow({ conversationId, otherUserName, otherUserAvatar }: Props) {
   const { user, isAuthenticated } = useAuthStore()
   const router    = useRouter()
   const qc        = useQueryClient()
-  const [input, setInput] = useState("")
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const [input,    setInput]    = useState("")
+  const [messages, setMessages] = useState<Message[]>([])
+  const [loading,  setLoading]  = useState(true)
+  const bottomRef  = useRef<HTMLDivElement>(null)
+  const intervalRef = useRef<NodeJS.Timeout>()
+  const lastIdRef   = useRef<number>(0)
 
-  // ── Fetch messages — poll every 3 seconds ────────────────────────────────
-  const { data: rawMessages, isLoading } = useQuery({
-    queryKey:      ["messages", conversationId],
-    queryFn:       () => api.get(`/chat/conversations/${conversationId}/messages/`).then((r) => r.data),
-    enabled:       !!conversationId && isAuthenticated(),
-    refetchInterval: 3000,   // poll every 3s — works on Render free tier
-    refetchIntervalInBackground: true,
-  })
+  // ── Fetch messages manually — no refetchInterval ─────────────────────────
+  const fetchMessages = useCallback(async () => {
+    if (!conversationId) return
+    try {
+      const res  = await api.get(`/chat/conversations/${conversationId}/messages/`)
+      const msgs: Message[] = Array.isArray(res.data)
+        ? res.data
+        : (res.data?.results ?? [])
+      setMessages(msgs)
+      setLoading(false)
+      // Track last message id to know if new messages arrived
+      if (msgs.length > 0) {
+        lastIdRef.current = msgs[msgs.length - 1].id
+      }
+    } catch {
+      setLoading(false)
+    }
+  }, [conversationId])
 
-  const messages: Message[] = Array.isArray(rawMessages)
-    ? rawMessages
-    : (rawMessages?.results ?? [])
-
-  // Scroll to bottom on new messages
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+    if (!isAuthenticated()) return
+    setLoading(true)
+    setMessages([])
+    fetchMessages()
+    // Poll every 3s — only fetch, don't trigger full re-render
+    intervalRef.current = setInterval(fetchMessages, 3000)
+    return () => clearInterval(intervalRef.current)
+  }, [conversationId, fetchMessages, isAuthenticated])
+
+  // Scroll to bottom only when new messages arrive
+  const prevLengthRef = useRef(0)
+  useEffect(() => {
+    if (messages.length > prevLengthRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+    }
+    prevLengthRef.current = messages.length
   }, [messages.length])
 
   // ── Send message ─────────────────────────────────────────────────────────
   const sendMutation = useMutation({
     mutationFn: (body: string) =>
       api.post(`/chat/conversations/${conversationId}/send/`, { body }),
-    onSuccess: () => {
+    onSuccess: (res) => {
       setInput("")
-      qc.invalidateQueries({ queryKey: ["messages", conversationId] })
-      qc.invalidateQueries({ queryKey: ["conversations"] })
+      // Optimistically add message immediately
+      setMessages((prev) => [...prev, res.data])
     },
-    onError: (e: any) => toast.error(e?.response?.data?.detail || "Failed to send message"),
+    onError: (e: any) =>
+      toast.error(e?.response?.data?.detail || "Failed to send message"),
   })
 
   const handleSend = () => {
     const body = input.trim()
-    if (!body) return
+    if (!body || sendMutation.isPending) return
     sendMutation.mutate(body)
   }
 
@@ -79,7 +101,9 @@ export function ChatWindow({ conversationId, otherUserName, otherUserAvatar }: P
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <Lock className="w-10 h-10 text-gray-300" />
         <p className="text-gray-500 text-sm">Please log in to chat</p>
-        <button onClick={() => router.push("/login")} className="btn-primary text-sm">Log in</button>
+        <button onClick={() => router.push("/login")} className="btn-primary text-sm">
+          Log in
+        </button>
       </div>
     )
   }
@@ -101,15 +125,15 @@ export function ChatWindow({ conversationId, otherUserName, otherUserAvatar }: P
         <div className="flex-1">
           <p className="font-semibold text-gray-900 text-sm">{otherUserName}</p>
           <div className="flex items-center gap-1.5">
-            <RefreshCw className="w-3 h-3 text-green-400 animate-spin" style={{ animationDuration: "3s" }} />
-            <p className="text-xs text-gray-400">Auto-refreshing every 3s</p>
+            <RefreshCw className="w-3 h-3 text-green-400" style={{ animation: "spin 3s linear infinite" }} />
+            <p className="text-xs text-gray-400">Live updates every 3s</p>
           </div>
         </div>
       </div>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-gray-50">
-        {isLoading ? (
+        {loading ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
           </div>
@@ -143,8 +167,12 @@ export function ChatWindow({ conversationId, otherUserName, otherUserAvatar }: P
                     {msg.body}
                   </div>
                   <p className="text-xs text-gray-400 px-1">
-                    {INR_TIME(msg.created_at)}
-                    {isMe && <span className="ml-1">{msg.is_read ? " ✓✓" : " ✓"}</span>}
+                    {new Date(msg.created_at).toLocaleTimeString("en-IN", {
+                      hour: "2-digit", minute: "2-digit",
+                    })}
+                    {isMe && (
+                      <span className="ml-1">{msg.is_read ? " ✓✓" : " ✓"}</span>
+                    )}
                   </p>
                 </div>
               </div>

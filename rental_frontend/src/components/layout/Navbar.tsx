@@ -3,7 +3,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuthStore } from "@/store/auth"
 import { Home, Menu, X, User, LogOut, MessageCircle } from "lucide-react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/api"
 import toast from "react-hot-toast"
@@ -27,17 +27,32 @@ export function Navbar() {
     router.push("/")
   }
 
-  // ── Unread message count badge ─────────────────────────────────────────────
-  const { data: unreadData } = useQuery({
-    queryKey: ["chat-unread"],
-    queryFn:  () => api.get("/chat/unread/").then((r) => r.data),
-    enabled:  hydrated && isAuthenticated(),
-    refetchInterval: 15000,  // check every 15s
-  })
-  const unreadCount = unreadData?.unread || 0
+  // ── Unread count — manual interval, NOT refetchInterval ───────────────────
+  // refetchInterval on a query in the layout causes full page re-renders
+  const [unreadCount, setUnreadCount] = useState(0)
+  const intervalRef = useRef<NodeJS.Timeout>()
+
+  useEffect(() => {
+    if (!hydrated || !isAuthenticated()) return
+
+    const fetchUnread = async () => {
+      try {
+        const res = await api.get("/chat/unread/")
+        setUnreadCount(res.data?.unread || 0)
+      } catch {}
+    }
+
+    fetchUnread() // fetch immediately
+    intervalRef.current = setInterval(fetchUnread, 30000) // then every 30s
+
+    return () => clearInterval(intervalRef.current)
+  }, [hydrated, isAuthenticated()])
 
   const link = (href: string, label: string) => (
-    <Link href={href} className={`btn-ghost text-sm ${pathname === href ? "text-brand-600 bg-brand-50" : ""}`}>
+    <Link
+      href={href}
+      className={`btn-ghost text-sm ${pathname === href ? "text-brand-600 bg-brand-50" : ""}`}
+    >
       {label}
     </Link>
   )
@@ -77,10 +92,12 @@ export function Navbar() {
                 </>
               )}
 
-              {/* Messages link with unread badge — shown to all logged-in users */}
+              {/* Messages with unread badge */}
               <Link
                 href="/chat"
-                className={`btn-ghost text-sm relative flex items-center gap-1.5 ${pathname === "/chat" ? "text-brand-600 bg-brand-50" : ""}`}
+                className={`relative btn-ghost text-sm flex items-center gap-1.5 ${
+                  pathname === "/chat" ? "text-brand-600 bg-brand-50" : ""
+                }`}
               >
                 <MessageCircle className="w-4 h-4" />
                 Messages
@@ -146,7 +163,6 @@ export function Navbar() {
                 </>
               )}
 
-              {/* Messages with badge in mobile too */}
               <Link
                 href="/chat"
                 className="flex items-center gap-2 btn-ghost w-full text-left"
