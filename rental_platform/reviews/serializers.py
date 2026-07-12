@@ -38,8 +38,9 @@ class ReviewSerializer(serializers.ModelSerializer):
         return booking
 
     def create(self, validated_data):
-        booking  = validated_data["booking"]
-        request  = self.context["request"]
+        booking = validated_data["booking"]
+        request = self.context["request"]
+        validated_data.pop("property", None)  # remove if present, we'll set it from booking
         return Review.objects.create(
             guest=request.user,
             host=booking.host,
