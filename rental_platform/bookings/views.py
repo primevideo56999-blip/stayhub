@@ -1,4 +1,5 @@
 from django.utils import timezone
+from django.utils import timezone
 from rest_framework import viewsets, generics, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -106,6 +107,15 @@ class BookingViewSet(viewsets.ModelViewSet):
         if status_filter:
             qs = qs.filter(status=status_filter)
         return Response(BookingSerializer(qs, many=True).data)
+    
+    @action(detail=True, methods=["post"], url_path="complete")
+    def complete(self, request, pk=None):
+        booking = get_object_or_404(Booking, pk=pk, host=request.user, is_active=True)
+        try:
+            booking.complete()
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"detail": "Booking completed.", "booking": BookingSerializer(booking).data})
 
 
 class PricePreviewView(generics.GenericAPIView):
