@@ -1,5 +1,4 @@
 "use client"
-import { useState } from "react"
 import { useMutation } from "@tanstack/react-query"
 import { api } from "@/lib/api"
 import { useAuthStore } from "@/store/auth"
@@ -8,9 +7,9 @@ import { MessageCircle, Loader2 } from "lucide-react"
 import toast from "react-hot-toast"
 
 interface Props {
-  propertyId:   number
-  hostName:     string
-  className?:   string
+  propertyId: number
+  hostName:   string
+  className?: string
 }
 
 export function ChatButton({ propertyId, hostName, className = "" }: Props) {
@@ -20,6 +19,7 @@ export function ChatButton({ propertyId, hostName, className = "" }: Props) {
   const mutation = useMutation({
     mutationFn: () => api.post("/chat/start/", { property_id: propertyId }),
     onSuccess: (res) => {
+      // Go to messages page with this conversation pre-selected
       router.push(`/chat?conversation=${res.data.conversation_id}`)
     },
     onError: (e: any) => toast.error(e?.response?.data?.detail || "Could not start chat"),

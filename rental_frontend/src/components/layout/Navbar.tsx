@@ -2,8 +2,10 @@
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuthStore } from "@/store/auth"
-import { Home, Menu, X, User, LogOut } from "lucide-react"
+import { Home, Menu, X, User, LogOut, MessageCircle } from "lucide-react"
 import { useState, useEffect } from "react"
+import { useQuery } from "@tanstack/react-query"
+import { api } from "@/lib/api"
 import toast from "react-hot-toast"
 
 function useHydrated() {
@@ -24,6 +26,15 @@ export function Navbar() {
     toast.success("Logged out")
     router.push("/")
   }
+
+  // ── Unread message count badge ─────────────────────────────────────────────
+  const { data: unreadData } = useQuery({
+    queryKey: ["chat-unread"],
+    queryFn:  () => api.get("/chat/unread/").then((r) => r.data),
+    enabled:  hydrated && isAuthenticated(),
+    refetchInterval: 15000,  // check every 15s
+  })
+  const unreadCount = unreadData?.unread || 0
 
   const link = (href: string, label: string) => (
     <Link href={href} className={`btn-ghost text-sm ${pathname === href ? "text-brand-600 bg-brand-50" : ""}`}>
@@ -54,10 +65,9 @@ export function Navbar() {
               {isHost() && (
                 <>
                   {link("/host/dashboard", "Dashboard")}
-                  {link("/host/bookings", "Bookings")}
-                  {link("/host/calendar", "Calendar")}
+                  {link("/host/bookings",  "Bookings")}
+                  {link("/host/calendar",  "Calendar")}
                   {link("/host/analytics", "Analytics")}
-                  {link("/chat", "Messages")}
                 </>
               )}
               {!isHost() && (
@@ -66,7 +76,23 @@ export function Navbar() {
                   {link("/saved", "Saved")}
                 </>
               )}
+
+              {/* Messages link with unread badge — shown to all logged-in users */}
+              <Link
+                href="/chat"
+                className={`btn-ghost text-sm relative flex items-center gap-1.5 ${pathname === "/chat" ? "text-brand-600 bg-brand-50" : ""}`}
+              >
+                <MessageCircle className="w-4 h-4" />
+                Messages
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-bold leading-none">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </Link>
+
               <div className="w-px h-5 bg-gray-200 mx-1" />
+
               <Link href="/profile" className="flex items-center gap-2 btn-ghost text-sm">
                 {user?.avatar ? (
                   <img src={user.avatar} alt="" className="w-7 h-7 rounded-full object-cover ring-2 ring-brand-200" />
@@ -119,6 +145,21 @@ export function Navbar() {
                   <Link href="/saved" className="block btn-ghost w-full text-left" onClick={() => setOpen(false)}>Saved</Link>
                 </>
               )}
+
+              {/* Messages with badge in mobile too */}
+              <Link
+                href="/chat"
+                className="flex items-center gap-2 btn-ghost w-full text-left"
+                onClick={() => setOpen(false)}
+              >
+                <span>Messages</span>
+                {unreadCount > 0 && (
+                  <span className="w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-bold">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </Link>
+
               <Link href="/profile" className="block btn-ghost w-full text-left" onClick={() => setOpen(false)}>Profile</Link>
               <button onClick={handleLogout} className="block btn-ghost w-full text-left text-red-500">Log out</button>
             </>
