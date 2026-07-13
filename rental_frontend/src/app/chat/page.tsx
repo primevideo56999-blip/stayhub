@@ -1,73 +1,65 @@
 "use client"
 import { Suspense } from "react"
-import { useQuery } from "@tanstack/react-query"
-import { api } from "@/lib/api"
-import { useAuthStore } from "@/store/auth"
-import { ChatWindow } from "@/components/chat/ChatWindow"
-import { useState, useEffect } from "react"
-import { MessageCircle, Search, Loader2 } from "lucide-react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
+import { useAuthStore } from "@/store/auth"
+import { AuthGuard } from "@/components/auth/AuthGuard"
+import { ChatWindow } from "@/components/chat/ChatWindow"
+import { api } from "@/lib/api"
+import { MessageCircle, Search, Loader2 } from "lucide-react"
 
 interface Conversation {
   id:           number
   property:     { id: number; title: string; city: string; cover_photo?: string }
   guest:        { id: number; full_name: string; avatar: string | null }
   host:         { id: number; full_name: string; avatar: string | null }
+  other_user:   { id: number; full_name: string; avatar: string | null }
   last_message: { body: string; created_at: string; sender_id: number } | null
   unread_count: number
   updated_at:   string
 }
 
-// ── Inner component uses useSearchParams — must be inside Suspense ────────────
-function ChatPageInner() {
-  const { user, isAuthenticated } = useAuthStore()
-  const router       = useRouter()
-  const searchParams = useSearchParams()
-  const [activeConvId, setActiveConvId] = useState<number | null>(null)
-  const [search, setSearch] = useState("")
+function ChatInner() {
+  const { user } = useAuthStore()
+  const searchParams    = useSearchParams()
+  const [activeConvId, setActiveConvId]     = useState<number | null>(null)
+  const [conversations, setConversations]   = useState<Conversation[]>([])
+  const [search, setSearch]                 = useState("")
+  const [loading, setLoading]               = useState(true)
+  const intervalRef = useRef<NodeJS.Timeout>()
 
-  // Auto-open conversation if ?conversation=ID in URL
+  // Auto-open conversation from URL param
   useEffect(() => {
     const convId = searchParams.get("conversation")
     if (convId) setActiveConvId(Number(convId))
   }, [searchParams])
 
-  const { data: rawData, isLoading } = useQuery({
-    queryKey: ["conversations"],
-    queryFn:  () => api.get("/chat/conversations/").then((r) => r.data),
-    enabled:  isAuthenticated(),
-    refetchInterval: 10000,
-  })
+  // Fetch conversations manually — no refetchInterval to avoid re-renders
+  const fetchConversations = useCallback(async () => {
+    try {
+      const res  = await api.get("/chat/conversations/")
+      const data = Array.isArray(res.data) ? res.data : (res.data?.results ?? [])
+      setConversations(data)
+      setLoading(false)
+    } catch {
+      setLoading(false)
+    }
+  }, [])
 
-  // Handle both array and paginated {results:[...]} response
-  const conversations: Conversation[] = Array.isArray(rawData)
-    ? rawData
-    : (rawData?.results ?? [])
-
-  if (!isAuthenticated()) {
-    return (
-      <div className="max-w-md mx-auto px-4 py-20 text-center">
-        <MessageCircle className="w-12 h-12 text-gray-200 mx-auto mb-4" />
-        <h2 className="font-display text-xl font-bold text-gray-900 mb-2">Log in to chat</h2>
-        <p className="text-gray-500 text-sm mb-6">
-          You need to be logged in to send and receive messages.
-        </p>
-        <button onClick={() => router.push("/login")} className="btn-primary">Log in</button>
-      </div>
-    )
-  }
+  useEffect(() => {
+    fetchConversations()
+    intervalRef.current = setInterval(fetchConversations, 10000)
+    return () => clearInterval(intervalRef.current)
+  }, [fetchConversations])
 
   const activeConv = conversations.find((c) => c.id === activeConvId)
-  const otherUser  = activeConv
-    ? (user?.id === activeConv.guest.id ? activeConv.host : activeConv.guest)
-    : null
+  const otherUser  = activeConv?.other_user || null
 
   const filtered = conversations.filter((c) => {
-    const other = user?.id === c.guest.id ? c.host : c.guest
-    return (
-      other.full_name.toLowerCase().includes(search.toLowerCase()) ||
-      c.property.title.toLowerCase().includes(search.toLowerCase())
-    )
+    const name = c.other_user?.full_name?.toLowerCase() || ""
+    const prop = c.property?.title?.toLowerCase() || ""
+    const q    = search.toLowerCase()
+    return name.includes(q) || prop.includes(q)
   })
 
   return (
@@ -89,7 +81,7 @@ function ChatPageInner() {
           </div>
 
           <div className="flex-1 overflow-y-auto space-y-1">
-            {isLoading ? (
+            {loading ? (
               [...Array(3)].map((_, i) => (
                 <div key={i} className="card p-4 h-20 animate-pulse bg-gray-100" />
               ))
@@ -97,11 +89,13 @@ function ChatPageInner() {
               <div className="card p-8 text-center text-gray-400">
                 <MessageCircle className="w-8 h-8 mx-auto mb-2 opacity-40" />
                 <p className="text-sm">No conversations yet</p>
-                <p className="text-xs mt-1 text-gray-300">Start a chat from any property page</p>
+                <p className="text-xs mt-1 text-gray-300">
+                  Start a chat from any property page
+                </p>
               </div>
             ) : (
               filtered.map((conv) => {
-                const other    = user?.id === conv.guest.id ? conv.host : conv.guest
+                const other    = conv.other_user
                 const isActive = conv.id === activeConvId
                 const timeStr  = conv.last_message
                   ? new Date(conv.last_message.created_at).toLocaleTimeString("en-IN", {
@@ -121,11 +115,11 @@ function ChatPageInner() {
                   >
                     <div className="flex items-start gap-3">
                       <div className="w-10 h-10 rounded-full bg-brand-100 overflow-hidden flex-shrink-0">
-                        {other.avatar ? (
+                        {other?.avatar ? (
                           <img src={other.avatar} alt="" className="w-full h-full object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center font-bold text-brand-600 text-sm">
-                            {other.full_name.charAt(0)}
+                            {other?.full_name?.charAt(0) || "?"}
                           </div>
                         )}
                       </div>
@@ -134,7 +128,7 @@ function ChatPageInner() {
                           <p className={`text-sm font-semibold truncate ${
                             isActive ? "text-brand-700" : "text-gray-900"
                           }`}>
-                            {other.full_name}
+                            {other?.full_name || "Unknown"}
                           </p>
                           <div className="flex items-center gap-1.5 flex-shrink-0">
                             {conv.unread_count > 0 && (
@@ -146,7 +140,7 @@ function ChatPageInner() {
                           </div>
                         </div>
                         <p className="text-xs text-gray-500 truncate mt-0.5">
-                          {conv.property.title}
+                          {conv.property?.title}
                         </p>
                         {conv.last_message && (
                           <p className={`text-xs truncate mt-0.5 ${
@@ -190,16 +184,16 @@ function ChatPageInner() {
   )
 }
 
-// ── Default export wraps inner component in Suspense ─────────────────────────
-// Required because useSearchParams() causes prerender errors in Next.js
 export default function ChatPage() {
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
-        <Loader2 className="w-8 h-8 text-gray-300 animate-spin" />
-      </div>
-    }>
-      <ChatPageInner />
-    </Suspense>
+    <AuthGuard>
+      <Suspense fallback={
+        <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
+          <Loader2 className="w-8 h-8 text-gray-300 animate-spin" />
+        </div>
+      }>
+        <ChatInner />
+      </Suspense>
+    </AuthGuard>
   )
 }

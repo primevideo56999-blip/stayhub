@@ -1,20 +1,23 @@
+// src/store/auth.ts
 import { create } from "zustand"
-import { persist } from "zustand/middleware"
+import { persist, createJSONStorage } from "zustand/middleware"
 import { User } from "@/types"
 import { authApi } from "@/lib/api"
 
 interface AuthState {
-  user: User | null
-  accessToken: string | null
+  user:         User | null
+  accessToken:  string | null
   refreshToken: string | null
-  isLoading: boolean
+  isLoading:    boolean
+  _hydrated:    boolean           // ← tracks if store has rehydrated from localStorage
 
-  login:  (email: string, password: string) => Promise<void>
-  logout: () => Promise<void>
-  fetchMe: () => Promise<void>
-  setUser: (user: User) => void
+  login:           (email: string, password: string) => Promise<void>
+  logout:          () => Promise<void>
+  fetchMe:         () => Promise<void>
+  setUser:         (user: User) => void
   isAuthenticated: () => boolean
-  isHost: () => boolean
+  isHost:          () => boolean
+  setHydrated:     (v: boolean) => void
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -24,9 +27,11 @@ export const useAuthStore = create<AuthState>()(
       accessToken:  null,
       refreshToken: null,
       isLoading:    false,
+      _hydrated:    false,
 
-      isAuthenticated: () => !!get().accessToken,
-      isHost: () => get().user?.role === "host",
+      isAuthenticated: () => !!get().accessToken && !!get().user,
+      isHost:          () => get().user?.role === "host",
+      setHydrated:     (v) => set({ _hydrated: v }),
 
       login: async (email, password) => {
         set({ isLoading: true })
@@ -66,12 +71,17 @@ export const useAuthStore = create<AuthState>()(
       setUser: (user) => set({ user }),
     }),
     {
-      name: "auth-storage",
+      name:    "auth-storage",
+      storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         user:         state.user,
         accessToken:  state.accessToken,
         refreshToken: state.refreshToken,
       }),
+      // Called after rehydration from localStorage completes
+      onRehydrateStorage: () => (state) => {
+        if (state) state.setHydrated(true)
+      },
     }
   )
 )
