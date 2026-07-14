@@ -9,6 +9,7 @@ import { useAuthStore } from "@/store/auth"
 import toast from "react-hot-toast"
 import { ReviewsResponse, PropertyPhoto } from "@/types"
 import { AvailabilityCalendar } from "@/components/property/AvailabilityCalendar"
+import { PhotoGallery } from "@/components/property/PhotoGallery"
 import { ChatButton } from "@/components/chat/ChatButton"
 
 const INR = (amount: string | number) =>
@@ -122,25 +123,7 @@ export default function PropertyDetailPage() {
       </div>
 
       {/* Photos */}
-      {photos.length > 0 ? (
-        <div className="grid grid-cols-4 grid-rows-2 gap-2 rounded-2xl overflow-hidden h-80 mb-8">
-          <div className="col-span-2 row-span-2">
-            <img src={photos[0]?.image} alt={property.title} className="w-full h-full object-cover" />
-          </div>
-          {photos.slice(1, 5).map((photo, i) => (
-            <div key={photo.id}>
-              <img src={photo.image} alt="" className="w-full h-full object-cover" />
-            </div>
-          ))}
-          {photos.length < 5 && [...Array(5 - photos.length)].map((_, i) => (
-            <div key={`e-${i}`} className="bg-gray-100" />
-          ))}
-        </div>
-      ) : (
-        <div className="h-80 bg-gray-100 rounded-2xl flex items-center justify-center mb-8">
-          <MapPin className="w-12 h-12 text-gray-300" />
-        </div>
-      )}
+      <PhotoGallery photos={photos} title={property.title} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
 
