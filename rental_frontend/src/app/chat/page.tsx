@@ -21,6 +21,7 @@ interface Conversation {
 
 function ChatInner() {
   const { user } = useAuthStore()
+  const router          = useRouter()
   const searchParams    = useSearchParams()
   const [activeConvId, setActiveConvId]     = useState<number | null>(null)
   const [conversations, setConversations]   = useState<Conversation[]>([])
@@ -28,11 +29,23 @@ function ChatInner() {
   const [loading, setLoading]               = useState(true)
   const intervalRef = useRef<NodeJS.Timeout>()
 
-  // Auto-open conversation from URL param
+  // Keep the active conversation in sync with the URL (?conversation=ID)
   useEffect(() => {
     const convId = searchParams.get("conversation")
-    if (convId) setActiveConvId(Number(convId))
+    setActiveConvId(convId ? Number(convId) : null)
   }, [searchParams])
+
+  // Selecting a conversation updates the URL, so the browser/hardware
+  // back button returns to the list on mobile
+  const openConversation = useCallback((id: number) => {
+    setActiveConvId(id)
+    router.push(`/chat?conversation=${id}`, { scroll: false })
+  }, [router])
+
+  const handleBack = useCallback(() => {
+    setActiveConvId(null)
+    router.replace("/chat", { scroll: false })
+  }, [router])
 
   // Fetch conversations manually — no refetchInterval to avoid re-renders
   const fetchConversations = useCallback(async () => {
@@ -55,6 +68,12 @@ function ChatInner() {
   const activeConv = conversations.find((c) => c.id === activeConvId)
   const otherUser  = activeConv?.other_user || null
 
+  // Deep link (?conversation=ID) pointing at a conversation that doesn't
+  // exist — fall back to the list once loading settles
+  useEffect(() => {
+    if (!loading && activeConvId && !activeConv) handleBack()
+  }, [loading, activeConvId, activeConv, handleBack])
+
   const filtered = conversations.filter((c) => {
     const name = c.other_user?.full_name?.toLowerCase() || ""
     const prop = c.property?.title?.toLowerCase() || ""
@@ -63,19 +82,25 @@ function ChatInner() {
   })
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-      <h1 className="font-display text-2xl font-bold text-gray-900 mb-6">Messages</h1>
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 md:py-6">
+      <h1 className={`font-display text-xl md:text-2xl font-bold text-gray-900 mb-4 md:mb-6 ${
+        activeConvId ? "hidden md:block" : ""
+      }`}>
+        Messages
+      </h1>
 
-      <div className="flex gap-4 h-[calc(100vh-12rem)]">
+      <div className={`flex md:gap-4 md:h-[calc(100vh-12rem)] ${
+        activeConvId ? "h-[calc(100dvh-6rem)]" : "h-[calc(100dvh-8.75rem)]"
+      }`}>
 
-        {/* ── Sidebar ───────────────────────────────────────────────── */}
-        <div className="w-80 flex-shrink-0 flex flex-col gap-3">
+        {/* ── Sidebar — full width on mobile, hidden there once a chat is open ── */}
+        <div className={`${activeConvId ? "hidden md:flex" : "flex"} w-full md:w-80 flex-shrink-0 flex-col gap-3 min-w-0`}>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="input pl-9 text-sm"
+              className="input pl-9 text-base sm:text-sm"
               placeholder="Search conversations…"
             />
           </div>
@@ -106,7 +131,7 @@ function ChatInner() {
                 return (
                   <button
                     key={conv.id}
-                    onClick={() => setActiveConvId(conv.id)}
+                    onClick={() => openConversation(conv.id)}
                     className={`w-full text-left p-3.5 rounded-xl border transition-all ${
                       isActive
                         ? "border-brand-300 bg-brand-50"
@@ -159,14 +184,19 @@ function ChatInner() {
           </div>
         </div>
 
-        {/* ── Chat window ───────────────────────────────────────────── */}
-        <div className="flex-1 min-w-0">
+        {/* ── Chat window — replaces the list on mobile, side-by-side on md+ ── */}
+        <div className={`${activeConvId ? "block" : "hidden md:block"} flex-1 min-w-0`}>
           {activeConvId && otherUser ? (
             <ChatWindow
               conversationId={activeConvId}
               otherUserName={otherUser.full_name}
               otherUserAvatar={otherUser.avatar}
+              onBack={handleBack}
             />
+          ) : activeConvId && loading ? (
+            <div className="h-full card flex items-center justify-center">
+              <Loader2 className="w-6 h-6 text-gray-300 animate-spin" />
+            </div>
           ) : (
             <div className="h-full card flex flex-col items-center justify-center text-center p-10">
               <MessageCircle className="w-14 h-14 text-gray-200 mb-4" />
