@@ -4,10 +4,16 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { useRouter } from "next/navigation"
+import dynamic from "next/dynamic"
 import { useQuery, useMutation } from "@tanstack/react-query"
 import { propertiesApi } from "@/lib/api"
 import toast from "react-hot-toast"
-import { Upload, X, ChevronRight, ChevronLeft, Check, Home, Image, DollarSign, Settings } from "lucide-react"
+import { Upload, X, ChevronRight, ChevronLeft, Check, Home, Image, DollarSign, Settings, MapPin } from "lucide-react"
+
+const LocationPicker = dynamic(
+  () => import("@/components/map/LocationPicker").then((m) => m.LocationPicker),
+  { ssr: false, loading: () => <div className="h-72 sm:h-80 rounded-2xl bg-gray-100 animate-pulse" /> }
+)
 
 const schema = z.object({
   title:          z.string().min(10, "At least 10 characters"),
@@ -55,8 +61,9 @@ export default function NewPropertyPage() {
     queryFn:  () => propertiesApi.amenities().then((r) => r.data),
   })
   const [selectedAmenities, setSelectedAmenities] = useState<number[]>([])
+  const [pin, setPin] = useState<{ lat: number; lng: number } | null>(null)
 
-  const { register, handleSubmit, trigger, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, trigger, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       allows_pets: false, allows_smoking: false, allows_parties: false,
@@ -67,7 +74,12 @@ export default function NewPropertyPage() {
 
   const createMutation = useMutation({
     mutationFn: (data: FormData) =>
-      propertiesApi.create({ ...data, amenity_ids: selectedAmenities }),
+      propertiesApi.create({
+        ...data,
+        amenity_ids: selectedAmenities,
+        latitude:  pin ? pin.lat.toFixed(6) : null,
+        longitude: pin ? pin.lng.toFixed(6) : null,
+      }),
     onSuccess: async (res) => {
       const id = res.data.id
       setCreatedId(id)
@@ -102,6 +114,10 @@ export default function NewPropertyPage() {
     if (step === 1) fields = ["title","description","property_type","address_line1","city","state","country","postal_code","max_guests","bedrooms","beds","bathrooms"]
     if (step === 3) fields = ["price_per_night","cleaning_fee","min_nights","max_nights"]
     const ok = fields.length ? await trigger(fields) : true
+    if (step === 1 && ok && !pin) {
+      toast.error("Pin your property's exact location on the map")
+      return
+    }
     if (ok) setStep((s) => s + 1)
   }
 
@@ -223,6 +239,24 @@ export default function NewPropertyPage() {
                   {errors.postal_code && <p className="error-text">{errors.postal_code.message}</p>}
                 </div>
               </div>
+            </div>
+
+            {/* Exact location pin */}
+            <div>
+              <label className="label flex items-center gap-1.5">
+                <MapPin className="w-4 h-4 text-brand-500" />
+                Pin exact location
+              </label>
+              <p className="text-xs text-gray-400 mb-3">
+                Search for your address or use your current location, then fine-tune the pin.
+              </p>
+              <LocationPicker
+                latitude={pin?.lat ?? null}
+                longitude={pin?.lng ?? null}
+                onChange={(lat, lng) => setPin({ lat, lng })}
+                addressHint={[watch("address_line1"), watch("city"), watch("country")]
+                  .filter(Boolean).join(", ")}
+              />
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

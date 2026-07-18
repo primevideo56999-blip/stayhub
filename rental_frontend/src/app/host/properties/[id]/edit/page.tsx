@@ -4,9 +4,15 @@ import { propertiesApi } from "@/lib/api"
 import { useParams, useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { useEffect, useState } from "react"
-import { Upload, X, Trash2, Eye, EyeOff, Save, ChevronLeft } from "lucide-react"
+import dynamic from "next/dynamic"
+import { Upload, X, Trash2, Eye, EyeOff, Save, ChevronLeft, MapPin } from "lucide-react"
 import toast from "react-hot-toast"
 import Link from "next/link"
+
+const LocationPicker = dynamic(
+  () => import("@/components/map/LocationPicker").then((m) => m.LocationPicker),
+  { ssr: false, loading: () => <div className="h-72 sm:h-80 rounded-2xl bg-gray-100 animate-pulse" /> }
+)
 
 export default function EditPropertyPage() {
   const { id }   = useParams<{ id: string }>()
@@ -14,6 +20,7 @@ export default function EditPropertyPage() {
   const qc       = useQueryClient()
   const [newPhotos, setNewPhotos]     = useState<File[]>([])
   const [newPreviews, setNewPreviews] = useState<string[]>([])
+  const [pin, setPin] = useState<{ lat: number; lng: number } | null>(null)
 
   const { data: amenities = [] } = useQuery({
     queryKey: ["amenities"],
@@ -26,7 +33,7 @@ export default function EditPropertyPage() {
     queryFn:  () => propertiesApi.detail(Number(id)).then((r) => r.data),
   })
 
-  const { register, handleSubmit, reset } = useForm()
+  const { register, handleSubmit, reset, watch } = useForm()
 
   useEffect(() => {
     if (property) {
@@ -45,12 +52,20 @@ export default function EditPropertyPage() {
         allows_parties: property.allows_parties,
       })
       setSelectedAmenities(property.amenities?.map((a: any) => a.id) || [])
+      if (property.latitude != null && property.longitude != null) {
+        setPin({ lat: Number(property.latitude), lng: Number(property.longitude) })
+      }
     }
   }, [property, reset])
 
   const updateMutation = useMutation({
     mutationFn: async (data: any) => {
-      await propertiesApi.update(Number(id), { ...data, amenity_ids: selectedAmenities })
+      await propertiesApi.update(Number(id), {
+        ...data,
+        amenity_ids: selectedAmenities,
+        latitude:  pin ? pin.lat.toFixed(6) : null,
+        longitude: pin ? pin.lng.toFixed(6) : null,
+      })
       for (const photo of newPhotos) {
         const fd = new FormData(); fd.append("image", photo)
         await propertiesApi.uploadPhoto(Number(id), fd)
@@ -191,6 +206,24 @@ export default function EditPropertyPage() {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* Location */}
+        <div className="card p-6">
+          <h2 className="font-display font-semibold text-gray-900 mb-1 flex items-center gap-1.5">
+            <MapPin className="w-4 h-4 text-brand-500" />
+            Exact location
+          </h2>
+          <p className="text-xs text-gray-400 mb-4">
+            Search for your address or drag the pin to update where guests find your place.
+          </p>
+          <LocationPicker
+            latitude={pin?.lat ?? null}
+            longitude={pin?.lng ?? null}
+            onChange={(lat, lng) => setPin({ lat, lng })}
+            addressHint={[watch("address_line1"), watch("city"), watch("country")]
+              .filter(Boolean).join(", ")}
+          />
         </div>
 
         {/* Amenities */}

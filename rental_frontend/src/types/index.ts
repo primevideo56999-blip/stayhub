@@ -89,6 +89,7 @@ export interface Property {
   // List serializer only
   cover_photo?: string
   host_name?: string
+  distance_km?: number | null
 }
 
 export type BookingStatus =

@@ -52,6 +52,7 @@ class PropertyListSerializer(serializers.ModelSerializer):
     """Lightweight — used in search results / lists."""
     cover_photo = serializers.SerializerMethodField()
     host_name   = serializers.CharField(source="host.full_name", read_only=True)
+    distance_km = serializers.SerializerMethodField()
 
     class Meta:
         model  = Property
@@ -60,8 +61,13 @@ class PropertyListSerializer(serializers.ModelSerializer):
             "latitude", "longitude", "price_per_night", "cleaning_fee",
             "max_guests", "bedrooms", "beds", "bathrooms",
             "avg_rating", "total_reviews",
-            "cover_photo", "host_name", "status",
+            "cover_photo", "host_name", "status", "distance_km",
         ]
+
+    def get_distance_km(self, obj):
+        # Present only on near_lat/near_lng queries (queryset annotation)
+        dist = getattr(obj, "distance_km", None)
+        return round(dist, 2) if dist is not None else None
 
     def get_cover_photo(self, obj):
         photo = obj.cover_photo

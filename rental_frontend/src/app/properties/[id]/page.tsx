@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query"
 import { propertiesApi, bookingsApi, reviewsApi } from "@/lib/api"
 import { useParams, useRouter } from "next/navigation"
 import { useState } from "react"
+import dynamic from "next/dynamic"
 import { Star, Users, Bed, Bath, MapPin, ChevronLeft, Heart, Share2, Wifi } from "lucide-react"
 import Link from "next/link"
 import { useAuthStore } from "@/store/auth"
@@ -11,6 +12,11 @@ import { ReviewsResponse, PropertyPhoto } from "@/types"
 import { AvailabilityCalendar } from "@/components/property/AvailabilityCalendar"
 import { PhotoGallery } from "@/components/property/PhotoGallery"
 import { ChatButton } from "@/components/chat/ChatButton"
+
+const StaticMap = dynamic(
+  () => import("@/components/map/StaticMap").then((m) => m.StaticMap),
+  { ssr: false, loading: () => <div className="h-64 rounded-2xl bg-gray-100 animate-pulse" /> }
+)
 
 const INR = (amount: string | number) =>
   new Intl.NumberFormat("en-IN", {
@@ -299,8 +305,18 @@ export default function PropertyDetailPage() {
               {property.address_line1 && `${property.address_line1}, `}
               {property.city}, {property.state} {property.postal_code}, {property.country}
             </p>
-            <div className="mt-3 h-48 bg-gray-100 rounded-2xl flex items-center justify-center text-gray-400 text-sm">
-              <MapPin className="w-5 h-5 mr-2" /> {property.city}, {property.country}
+            <div className="mt-3">
+              {property.latitude != null && property.longitude != null ? (
+                <StaticMap
+                  latitude={Number(property.latitude)}
+                  longitude={Number(property.longitude)}
+                  label={property.city}
+                />
+              ) : (
+                <div className="h-48 bg-gray-100 rounded-2xl flex items-center justify-center text-gray-400 text-sm">
+                  <MapPin className="w-5 h-5 mr-2" /> {property.city}, {property.country}
+                </div>
+              )}
             </div>
           </div>
         </div>

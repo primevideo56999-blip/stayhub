@@ -4,11 +4,17 @@ import { useQuery } from "@tanstack/react-query"
 import { propertiesApi } from "@/lib/api"
 import { Property } from "@/types"
 import Link from "next/link"
+import dynamic from "next/dynamic"
 import {
   Search, SlidersHorizontal, Star, Users, Bed,
-  Home, MapPin, X, Navigation, Loader2
+  Home, MapPin, X, Navigation, Loader2, Map as MapIcon, List
 } from "lucide-react"
 import { useAuthStore } from "@/store/auth"
+
+const SearchMap = dynamic(
+  () => import("@/components/map/SearchMap").then((m) => m.SearchMap),
+  { ssr: false, loading: () => <div className="h-full w-full rounded-2xl bg-gray-100 animate-pulse" /> }
+)
 
 // ── Currency formatter ────────────────────────────────────────────────────────
 const INR = (amount: string | number) =>
@@ -61,6 +67,13 @@ function PropertyCard({ property }: { property: Property }) {
           <p className="text-xs text-gray-500 mb-3 flex items-center gap-1">
             <MapPin className="w-3 h-3 flex-shrink-0" />
             {property.city}, {property.country}
+            {property.distance_km != null && (
+              <span className="text-brand-600 font-medium ml-1">
+                · {property.distance_km < 1
+                    ? `${Math.round(property.distance_km * 1000)} m`
+                    : `${property.distance_km} km`} away
+              </span>
+            )}
           </p>
           <div className="flex items-center gap-3 text-xs text-gray-400 mb-3">
             <span className="flex items-center gap-1">
@@ -180,10 +193,12 @@ const PROPERTY_TYPES = [
 export default function SearchPage() {
   const today = new Date().toISOString().split("T")[0]
 
-  const [locationCity, setLocationCity]       = useState("")
+  const [locationCity, setLocationCity]         = useState("")
   const [locationDetected, setLocationDetected] = useState(false)
   const [locationLoading, setLocationLoading]   = useState(false)
   const [locationBanner, setLocationBanner]     = useState(false)
+  const [userCoords, setUserCoords]             = useState<{ lat: number; lng: number } | null>(null)
+  const [view, setView]                         = useState<"list" | "map">("list")
 
   const [filters, setFilters] = useState({
     search:        "",
@@ -199,14 +214,18 @@ export default function SearchPage() {
   const [applied, setApplied] = useState<typeof filters>(filters)
   const [showFilters, setShowFilters] = useState(false)
 
-  // ── Auto-detect location on mount ─────────────────────────────────────────
-  useEffect(() => {
+  // ── GPS detection — store coords for nearest-first sorting, and reverse
+  //    geocode just for the "near <city>" label ────────────────────────────
+  const detectLocation = useCallback(() => {
     if (!navigator.geolocation) return
     setLocationLoading(true)
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
+        const { latitude, longitude } = pos.coords
+        setUserCoords({ lat: latitude, lng: longitude })
+        setLocationDetected(true)
+        setLocationBanner(true)
         try {
-          const { latitude, longitude } = pos.coords
           const res = await fetch(
             `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
             { headers: { "Accept-Language": "en" } }
@@ -218,14 +237,7 @@ export default function SearchPage() {
             data.address?.village ||
             data.address?.county ||
             ""
-          if (city) {
-            setLocationCity(city)
-            setLocationDetected(true)
-            setLocationBanner(true)
-            const newFilters = { ...filters, city }
-            setFilters(newFilters)
-            setApplied(newFilters)
-          }
+          if (city) setLocationCity(city)
         } catch {}
         setLocationLoading(false)
       },
@@ -234,8 +246,11 @@ export default function SearchPage() {
     )
   }, [])
 
+  // Auto-detect on mount
+  useEffect(() => { detectLocation() }, [detectLocation])
+
   const { data, isLoading } = useQuery({
-    queryKey: ["properties", applied],
+    queryKey: ["properties", applied, userCoords],
     queryFn: () =>
       propertiesApi.list({
         search:        applied.search || undefined,
@@ -247,6 +262,8 @@ export default function SearchPage() {
         min_guests:    applied.min_guests || undefined,
         property_type: applied.property_type || undefined,
         allows_pets:   applied.allows_pets || undefined,
+        near_lat:      userCoords?.lat,
+        near_lng:      userCoords?.lng,
       }).then((r) => r.data),
   })
 
@@ -277,14 +294,13 @@ export default function SearchPage() {
         <div className="flex items-center gap-3 bg-brand-50 border border-brand-200 rounded-xl px-4 py-3 mb-4">
           <Navigation className="w-4 h-4 text-brand-500 flex-shrink-0" />
           <p className="text-sm text-brand-700 flex-1">
-            Showing properties near <strong>{locationCity}</strong>
+            Showing places nearest to you{locationCity && <> — near <strong>{locationCity}</strong></>}
           </p>
           <button
             onClick={() => {
               setLocationBanner(false)
-              const newFilters = { ...filters, city: "" }
-              setFilters(newFilters)
-              setApplied(newFilters)
+              setUserCoords(null)
+              setLocationDetected(false)
             }}
             className="text-brand-400 hover:text-brand-600"
           >
@@ -432,51 +448,53 @@ export default function SearchPage() {
       )}
 
       {/* Results header */}
-      <div className="flex items-center justify-between mb-5">
+      <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
         <p className="text-sm text-gray-500">
           {isLoading
             ? "Searching…"
             : `${properties.length} place${properties.length !== 1 ? "s" : ""} found`}
           {applied.city && ` in ${applied.city}`}
+          {!applied.city && locationDetected && " · nearest first"}
           {applied.check_in && ` · ${applied.check_in} → ${applied.check_out}`}
         </p>
-        {!locationDetected && !locationLoading && (
-          <button
-            onClick={() => {
-              setLocationLoading(true)
-              navigator.geolocation?.getCurrentPosition(
-                async (pos) => {
-                  try {
-                    const res = await fetch(
-                      `https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`,
-                      { headers: { "Accept-Language": "en" } }
-                    )
-                    const data = await res.json()
-                    const city = data.address?.city || data.address?.town || data.address?.village || ""
-                    if (city) {
-                      setLocationCity(city)
-                      setLocationDetected(true)
-                      setLocationBanner(true)
-                      const newFilters = { ...filters, city }
-                      setFilters(newFilters)
-                      setApplied(newFilters)
-                    }
-                  } catch {}
-                  setLocationLoading(false)
-                },
-                () => setLocationLoading(false)
-              )
-            }}
-            className="btn-ghost text-sm flex items-center gap-1.5 text-brand-600"
-          >
-            <Navigation className="w-3.5 h-3.5" />
-            Use my location
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {!locationDetected && !locationLoading && (
+            <button
+              onClick={detectLocation}
+              className="btn-ghost text-sm flex items-center gap-1.5 text-brand-600"
+            >
+              <Navigation className="w-3.5 h-3.5" />
+              Use my location
+            </button>
+          )}
+          {/* List / map toggle */}
+          <div className="flex rounded-xl border border-gray-200 overflow-hidden">
+            <button
+              onClick={() => setView("list")}
+              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${
+                view === "list" ? "bg-gray-900 text-white" : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              <List className="w-4 h-4" /> List
+            </button>
+            <button
+              onClick={() => setView("map")}
+              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${
+                view === "map" ? "bg-gray-900 text-white" : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              <MapIcon className="w-4 h-4" /> Map
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Grid */}
-      {isLoading ? (
+      {/* Results — list or map */}
+      {view === "map" ? (
+        <div className="h-[calc(100dvh-16rem)] min-h-[24rem]">
+          <SearchMap properties={properties} userLocation={userCoords} />
+        </div>
+      ) : isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
           {[...Array(8)].map((_, i) => (
             <div key={i} className="card overflow-hidden animate-pulse">
