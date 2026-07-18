@@ -249,6 +249,13 @@ export default function SearchPage() {
   // Auto-detect on mount
   useEffect(() => { detectLocation() }, [detectLocation])
 
+  // Switching to map view: if we don't have GPS yet (denied/skipped earlier),
+  // ask again so the map can zoom to the guest's position
+  const openMapView = () => {
+    setView("map")
+    if (!userCoords && !locationLoading) detectLocation()
+  }
+
   const { data, isLoading } = useQuery({
     queryKey: ["properties", applied, userCoords],
     queryFn: () =>
@@ -478,7 +485,7 @@ export default function SearchPage() {
               <List className="w-4 h-4" /> List
             </button>
             <button
-              onClick={() => setView("map")}
+              onClick={openMapView}
               className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${
                 view === "map" ? "bg-gray-900 text-white" : "bg-white text-gray-600 hover:bg-gray-50"
               }`}
@@ -492,7 +499,12 @@ export default function SearchPage() {
       {/* Results — list or map */}
       {view === "map" ? (
         <div className="h-[calc(100dvh-16rem)] min-h-[24rem]">
-          <SearchMap properties={properties} userLocation={userCoords} />
+          <SearchMap
+            properties={properties}
+            userLocation={userCoords}
+            onLocate={detectLocation}
+            locating={locationLoading}
+          />
         </div>
       ) : isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">

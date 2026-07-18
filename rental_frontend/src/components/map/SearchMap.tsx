@@ -3,7 +3,7 @@ import { useMemo, useRef, useState, useEffect } from "react"
 import Map, { Marker, Popup, NavigationControl, MapRef } from "react-map-gl/maplibre"
 import "maplibre-gl/dist/maplibre-gl.css"
 import Link from "next/link"
-import { Star, Navigation } from "lucide-react"
+import { Star, Navigation, Crosshair, Loader2 } from "lucide-react"
 import { Property } from "@/types"
 import { OSM_STYLE } from "./osm"
 
@@ -15,23 +15,37 @@ const INR = (amount: string | number) =>
 interface Props {
   properties: Property[]
   userLocation?: { lat: number; lng: number } | null
+  // Ask the parent to (re)request browser GPS — shown as a locate button on the map
+  onLocate?: () => void
+  locating?: boolean
 }
 
-export function SearchMap({ properties, userLocation }: Props) {
+export function SearchMap({ properties, userLocation, onLocate, locating }: Props) {
   const mapRef = useRef<MapRef>(null)
   const [selected, setSelected] = useState<Property | null>(null)
+  const [mapLoaded, setMapLoaded] = useState(false)
 
   const located = useMemo(
     () => properties.filter((p) => p.latitude != null && p.longitude != null),
     [properties]
   )
 
-  // Fit the map to the visible pins (and the user) whenever results change
+  // GPS available → zoom straight into the guest's position (blue dot centred)
   useEffect(() => {
+    if (!mapLoaded || !userLocation) return
+    mapRef.current?.flyTo({
+      center: [userLocation.lng, userLocation.lat],
+      zoom: 13,
+      duration: 1200,
+    })
+  }, [mapLoaded, userLocation])
+
+  // No GPS → fall back to fitting the map around the listing pins
+  useEffect(() => {
+    if (!mapLoaded || userLocation) return
     const map = mapRef.current
     if (!map) return
     const points: [number, number][] = located.map((p) => [Number(p.longitude), Number(p.latitude)])
-    if (userLocation) points.push([userLocation.lng, userLocation.lat])
     if (points.length === 0) return
     if (points.length === 1) {
       map.flyTo({ center: points[0], zoom: 13, duration: 800 })
@@ -43,16 +57,33 @@ export function SearchMap({ properties, userLocation }: Props) {
       [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
       { padding: 60, maxZoom: 14, duration: 800 }
     )
-  }, [located, userLocation])
+  }, [mapLoaded, located, userLocation])
+
+  const recenter = () => {
+    if (userLocation) {
+      mapRef.current?.flyTo({
+        center: [userLocation.lng, userLocation.lat],
+        zoom: 13,
+        duration: 1000,
+      })
+    } else {
+      onLocate?.()
+    }
+  }
 
   return (
-    <div className="h-full w-full rounded-2xl overflow-hidden border border-gray-200">
+    <div className="h-full w-full rounded-2xl overflow-hidden border border-gray-200 relative">
       <Map
         ref={mapRef}
-        initialViewState={{ latitude: 20.5937, longitude: 78.9629, zoom: 4 }}
+        initialViewState={
+          userLocation
+            ? { latitude: userLocation.lat, longitude: userLocation.lng, zoom: 13 }
+            : { latitude: 20.5937, longitude: 78.9629, zoom: 4 }
+        }
         mapStyle={OSM_STYLE as any}
         style={{ width: "100%", height: "100%" }}
         onClick={() => setSelected(null)}
+        onLoad={() => setMapLoaded(true)}
       >
         <NavigationControl position="top-right" showCompass={false} />
 
@@ -128,6 +159,22 @@ export function SearchMap({ properties, userLocation }: Props) {
           </Popup>
         )}
       </Map>
+
+      {/* Locate-me button — recenters on the blue dot, or requests GPS if not granted yet */}
+      <button
+        onClick={recenter}
+        disabled={locating}
+        aria-label="Show my location"
+        title={userLocation ? "Center on my location" : "Use my location"}
+        className="absolute bottom-4 right-4 w-11 h-11 rounded-full bg-white shadow-float border border-gray-200
+                   flex items-center justify-center text-gray-700 hover:text-brand-600 hover:border-brand-300
+                   focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:opacity-60"
+      >
+        {locating
+          ? <Loader2 className="w-5 h-5 animate-spin" />
+          : <Crosshair className={`w-5 h-5 ${userLocation ? "text-blue-500" : ""}`} />
+        }
+      </button>
     </div>
   )
 }
