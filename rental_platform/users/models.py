@@ -12,6 +12,7 @@ class User(AbstractUser):
     role        = models.CharField(max_length=10, choices=Role.choices, default=Role.GUEST)
     phone       = models.CharField(max_length=20, blank=True)
     phone_verified = models.BooleanField(default=False)
+    email_verified = models.BooleanField(default=False)
     avatar      = models.ImageField(upload_to="avatars/", blank=True, null=True)
     bio         = models.TextField(blank=True)
     is_verified = models.BooleanField(default=False)   # ID-verified host/guest

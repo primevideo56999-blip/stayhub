@@ -50,6 +50,11 @@ export default function LoginPage() {
             <label className="label">Password</label>
             <input {...register("password")} type="password" className="input" placeholder="••••••••" />
             {errors.password && <p className="error-text">{errors.password.message}</p>}
+            <p className="text-right mt-1.5">
+              <Link href="/forgot-password" className="text-xs text-gray-400 hover:text-brand-600 hover:underline">
+                Forgot password?
+              </Link>
+            </p>
           </div>
 
           <button type="submit" disabled={isLoading} className="btn-primary w-full">

@@ -7,7 +7,8 @@ import { useMutation } from "@tanstack/react-query"
 import { authApi } from "@/lib/api"
 import { useAuthStore } from "@/store/auth"
 import toast from "react-hot-toast"
-import { Camera, Save, Lock } from "lucide-react"
+import { Camera, Save, Lock, BadgeCheck, ShieldAlert, X } from "lucide-react"
+import { OtpInput } from "@/components/auth/OtpInput"
 
 const profileSchema = z.object({
   first_name: z.string().min(1, "Required"),
@@ -23,10 +24,28 @@ const passwordSchema = z.object({
 type ProfileForm   = z.infer<typeof profileSchema>
 type PasswordForm  = z.infer<typeof passwordSchema>
 
+function VerifiedBadge({ verified }: { verified: boolean }) {
+  return verified ? (
+    <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600">
+      <BadgeCheck className="w-3.5 h-3.5" /> Verified
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600">
+      <ShieldAlert className="w-3.5 h-3.5" /> Not verified
+    </span>
+  )
+}
+
 export default function ProfilePage() {
-  const { user, fetchMe } = useAuthStore()
+  const { user, fetchMe, setUser } = useAuthStore()
   const [avatar, setAvatar]   = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(user?.avatar || null)
+  // Which OTP dialog is open: verify the account email, or confirm a phone change
+  const [otpDialog, setOtpDialog] = useState<
+    | { purpose: "verify_account" }
+    | { purpose: "change_phone"; phone: string }
+    | null
+  >(null)
 
   const { register: rp, handleSubmit: hp, formState: { errors: ep } } = useForm<ProfileForm>({
     resolver: zodResolver(profileSchema),
@@ -46,9 +65,18 @@ export default function ProfilePage() {
       const fd = new FormData()
       Object.entries(data).forEach(([k, v]) => v && fd.append(k, v))
       if (avatar) fd.append("avatar_upload", avatar)
-      return authApi.updateMeForm(fd)
+      await authApi.updateMeForm(fd)
+      return data
     },
-    onSuccess: async () => { await fetchMe(); toast.success("Profile updated!") },
+    onSuccess: async (data) => {
+      const phoneChanged = (data.phone || "") !== (user?.phone || "")
+      await fetchMe()
+      toast.success("Profile updated!")
+      // New/changed number needs re-verification via emailed code
+      if (phoneChanged && data.phone) {
+        setOtpDialog({ purpose: "change_phone", phone: data.phone })
+      }
+    },
     onError:   () => toast.error("Failed to update profile"),
   })
 
@@ -74,6 +102,22 @@ export default function ProfilePage() {
         <p className="text-gray-500 text-sm mt-0.5">Manage your account details</p>
       </div>
 
+      {/* Unverified account banner */}
+      {!user.email_verified && (
+        <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          <ShieldAlert className="w-4 h-4 text-amber-500 flex-shrink-0" />
+          <p className="text-sm text-amber-700 flex-1">
+            Your account isn&apos;t verified yet — confirm the code we email you.
+          </p>
+          <button
+            onClick={() => setOtpDialog({ purpose: "verify_account" })}
+            className="btn-primary text-sm py-1.5 px-3 flex-shrink-0"
+          >
+            Verify now
+          </button>
+        </div>
+      )}
+
       {/* Profile form */}
       <div className="card p-6">
         <h2 className="font-display font-semibold text-gray-900 mb-5 flex items-center gap-2">
@@ -98,7 +142,9 @@ export default function ProfilePage() {
           </div>
           <div>
             <p className="font-medium text-gray-900">{user.full_name}</p>
-            <p className="text-sm text-gray-500">{user.email}</p>
+            <p className="text-sm text-gray-500 flex items-center gap-2">
+              {user.email} <VerifiedBadge verified={user.email_verified} />
+            </p>
             <span className="badge badge-active capitalize mt-1">{user.role}</span>
           </div>
         </div>
@@ -118,8 +164,20 @@ export default function ProfilePage() {
           </div>
 
           <div>
-            <label className="label">Phone number</label>
-            <input {...rp("phone")} className="input" placeholder="+1 555 000 0000" />
+            <label className="label flex items-center justify-between">
+              <span>Phone number</span>
+              {user.phone && <VerifiedBadge verified={user.phone_verified} />}
+            </label>
+            <input {...rp("phone")} type="tel" className="input" placeholder="+1 555 000 0000" />
+            {user.phone && !user.phone_verified && (
+              <button
+                type="button"
+                onClick={() => setOtpDialog({ purpose: "change_phone", phone: user.phone })}
+                className="text-xs text-brand-600 font-medium hover:underline mt-1.5"
+              >
+                Verify this number
+              </button>
+            )}
           </div>
 
           <div>
@@ -157,6 +215,40 @@ export default function ProfilePage() {
           </button>
         </form>
       </div>
+
+      {/* OTP verification dialog */}
+      {otpDialog && (
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center px-4">
+          <div className="card w-full max-w-sm p-6 relative">
+            <button
+              onClick={() => setOtpDialog(null)}
+              aria-label="Close"
+              className="absolute top-3 right-3 p-1.5 rounded-full text-gray-400 hover:bg-gray-100"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <h3 className="font-display font-semibold text-gray-900 mb-1">
+              {otpDialog.purpose === "verify_account" ? "Verify your account" : "Confirm your number"}
+            </h3>
+            <p className="text-sm text-gray-500 mb-5">
+              Enter the 6-digit code sent to <strong>{user.email}</strong>
+            </p>
+            <OtpInput
+              purpose={otpDialog.purpose}
+              verifyExtra={otpDialog.purpose === "change_phone" ? { phone: otpDialog.phone } : undefined}
+              autoSend
+              onVerified={(u) => {
+                if (u) setUser(u)
+                else fetchMe()
+                toast.success(
+                  otpDialog.purpose === "verify_account" ? "Account verified!" : "Phone number verified!"
+                )
+                setOtpDialog(null)
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

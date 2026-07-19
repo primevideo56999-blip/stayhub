@@ -9,13 +9,16 @@ import { authApi } from "@/lib/api"
 import { useAuthStore } from "@/store/auth"
 import toast from "react-hot-toast"
 import { useState } from "react"
-import { Home, User } from "lucide-react"
+import { Home, User, MailCheck } from "lucide-react"
+import { OtpInput } from "@/components/auth/OtpInput"
 
 const schema = z.object({
   first_name: z.string().min(1, "Required"),
   last_name:  z.string().min(1, "Required"),
   email:      z.string().email("Enter a valid email"),
   username:   z.string().min(3, "At least 3 characters"),
+  phone:      z.string().optional()
+                .refine((v) => !v || /^\+?[\d\s-]{7,20}$/.test(v), "Enter a valid phone number"),
   password:   z.string().min(8, "At least 8 characters"),
   password2:  z.string(),
   role:       z.enum(["guest", "host"]),
@@ -30,6 +33,8 @@ function RegisterForm() {
   const searchParams = useSearchParams()
   const defaultRole  = (searchParams.get("role") === "host" ? "host" : "guest") as "guest" | "host"
   const [loading, setLoading] = useState(false)
+  // After account creation we show the verify-code step before redirecting
+  const [verifyStep, setVerifyStep] = useState<{ email: string; role: string } | null>(null)
   const router   = useRouter()
   const { fetchMe } = useAuthStore()
 
@@ -40,6 +45,9 @@ function RegisterForm() {
 
   const role = watch("role")
 
+  const finishRedirect = (r: string) =>
+    router.push(r === "host" ? "/host/profile-setup" : "/")
+
   const onSubmit = async (data: FormData) => {
     setLoading(true)
     try {
@@ -47,8 +55,8 @@ function RegisterForm() {
       localStorage.setItem("access_token",  res.access)
       localStorage.setItem("refresh_token", res.refresh)
       useAuthStore.setState({ user: res.user, accessToken: res.access, refreshToken: res.refresh })
-      toast.success("Account created!")
-      router.push(data.role === "host" ? "/host/profile-setup" : "/")
+      toast.success("Account created! Check your email for the code.")
+      setVerifyStep({ email: data.email, role: data.role })
     } catch (err: any) {
       const errs = err?.response?.data
       if (errs) {
@@ -59,6 +67,42 @@ function RegisterForm() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // ── Step 2: verify the emailed code ─────────────────────────────────────
+  if (verifyStep) {
+    return (
+      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4 py-12">
+        <div className="card w-full max-w-md p-8">
+          <div className="text-center mb-8">
+            <div className="w-14 h-14 rounded-full bg-brand-50 flex items-center justify-center mx-auto mb-4">
+              <MailCheck className="w-7 h-7 text-brand-500" />
+            </div>
+            <h1 className="font-display text-2xl font-bold text-gray-900">Verify your account</h1>
+            <p className="text-gray-500 text-sm mt-1">
+              We emailed a 6-digit code to <strong>{verifyStep.email}</strong>
+            </p>
+          </div>
+          <OtpInput
+            purpose="verify_account"
+            onVerified={(user) => {
+              if (user) useAuthStore.getState().setUser(user)
+              else fetchMe()
+              toast.success("Account verified!")
+              finishRedirect(verifyStep.role)
+            }}
+          />
+          <p className="text-center text-sm text-gray-400 mt-6">
+            <button
+              onClick={() => finishRedirect(verifyStep.role)}
+              className="hover:text-gray-600 hover:underline"
+            >
+              Skip for now — verify later from your profile
+            </button>
+          </p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -107,6 +151,11 @@ function RegisterForm() {
             <label className="label">Username</label>
             <input {...register("username")} className="input" placeholder="janedoe" />
             {errors.username && <p className="error-text">{errors.username.message}</p>}
+          </div>
+          <div>
+            <label className="label">Mobile number <span className="text-gray-400 font-normal">(optional)</span></label>
+            <input {...register("phone")} type="tel" className="input" placeholder="+91 98765 43210" />
+            {errors.phone && <p className="error-text">{errors.phone.message}</p>}
           </div>
           <div>
             <label className="label">Password</label>

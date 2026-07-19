@@ -119,3 +119,38 @@ def notify_new_review(review_id):
         template="notifications/new_review.txt",
         context={"review": review},
     )
+
+
+# ── OTP / verification emails ─────────────────────────────────────────────────
+
+OTP_SUBJECTS = {
+    "verify_account": "Verify your StayHub account",
+    "reset_password": "Reset your StayHub password",
+    "change_phone":   "Confirm your new phone number",
+}
+
+
+@shared_task
+def send_otp_email(user_id, code, purpose):
+    from users.models import User
+    try:
+        user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        return
+    subject = OTP_SUBJECTS.get(purpose, "Your StayHub verification code")
+    body = (
+        f"Hi {user.first_name or 'there'},\n\n"
+        f"Your StayHub verification code is: {code}\n\n"
+        f"It expires in 10 minutes. If you didn't request this, you can ignore this email.\n\n"
+        f"— The StayHub team"
+    )
+    try:
+        send_mail(
+            subject=subject,
+            message=body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[user.email],
+            fail_silently=False,
+        )
+    except Exception as e:
+        print(f"[EMAIL ERROR] {user.email} | {subject} | {e}")

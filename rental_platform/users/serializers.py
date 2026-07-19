@@ -7,10 +7,11 @@ class RegisterSerializer(serializers.ModelSerializer):
     password  = serializers.CharField(write_only=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True)
     role      = serializers.ChoiceField(choices=User.Role.choices, default=User.Role.GUEST)
+    phone     = serializers.CharField(required=False, allow_blank=True, max_length=20)
 
     class Meta:
         model  = User
-        fields = ["email", "username", "first_name", "last_name", "password", "password2", "role"]
+        fields = ["email", "username", "first_name", "last_name", "password", "password2", "role", "phone"]
 
     def validate(self, attrs):
         if attrs["password"] != attrs.pop("password2"):
@@ -33,10 +34,10 @@ class UserSerializer(serializers.ModelSerializer):
         model  = User
         fields = [
             "id", "email", "username", "first_name", "last_name",
-            "full_name", "role", "phone", "phone_verified",
+            "full_name", "role", "phone", "phone_verified", "email_verified",
             "avatar", "avatar_upload", "bio", "is_verified", "created_at",
         ]
-        read_only_fields = ["id", "email", "role", "phone_verified", "is_verified", "created_at"]
+        read_only_fields = ["id", "email", "role", "phone_verified", "email_verified", "is_verified", "created_at"]
 
     def get_avatar(self, obj):
         if not obj.avatar:
@@ -80,3 +81,10 @@ class ChangePasswordSerializer(serializers.Serializer):
         user.set_password(self.validated_data["new_password"])
         user.save()
         return user
+
+
+class ResetPasswordSerializer(serializers.Serializer):
+    """Forgot-password: verify emailed OTP code, then set a new password."""
+    email        = serializers.EmailField()
+    code         = serializers.CharField(max_length=6)
+    new_password = serializers.CharField(write_only=True, validators=[validate_password])

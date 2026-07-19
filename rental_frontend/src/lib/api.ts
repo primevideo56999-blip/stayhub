@@ -51,6 +51,12 @@ export const authApi = {
     api.patch("/auth/me/", data, { headers: { "Content-Type": "multipart/form-data" } }),
   changePassword: (data: any) => api.put("/auth/change-password/", data),
   hostProfileStatus: () => api.get("/auth/host-profile-status/"),
+  // OTP verification (codes delivered by email)
+  otpSend:        (data: { purpose: string; email?: string }) => api.post("/auth/otp/send/", data),
+  otpVerify:      (data: { purpose: string; code: string; phone?: string }) => api.post("/auth/otp/verify/", data),
+  forgotPassword: (email: string) => api.post("/auth/forgot-password/", { email }),
+  resetPassword:  (data: { email: string; code: string; new_password: string }) =>
+    api.post("/auth/reset-password/", data),
 }
 
 // ── Properties ────────────────────────────────────────────────────────────────

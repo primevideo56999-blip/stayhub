@@ -10,6 +10,7 @@ export interface User {
   role: Role
   phone: string
   phone_verified: boolean
+  email_verified: boolean
   avatar: string | null
   bio: string
   is_verified: boolean
