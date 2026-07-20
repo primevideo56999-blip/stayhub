@@ -5,6 +5,7 @@ import { Property } from "@/types"
 import Link from "next/link"
 import { Heart, Home } from "lucide-react"
 import { WishlistButton } from "@/components/ui/WishlistButton"
+import { INR } from "@/lib/currency"
 
 function SavedCard({ property }: { property: Property }) {
   return (
@@ -27,7 +28,7 @@ function SavedCard({ property }: { property: Property }) {
           <h3 className="font-semibold text-gray-900 text-sm truncate">{property.title}</h3>
           <p className="text-xs text-gray-500 mt-0.5">{property.city}, {property.country}</p>
           <p className="font-bold text-gray-900 mt-2">
-            ${property.price_per_night}
+            {INR(property.price_per_night)}
             <span className="text-xs font-normal text-gray-400"> / night</span>
           </p>
         </div>
@@ -39,7 +40,11 @@ function SavedCard({ property }: { property: Property }) {
 export default function SavedPage() {
   const { data: properties = [], isLoading } = useQuery({
     queryKey: ["wishlist", "saved"],
-    queryFn:  () => api.get("/wishlist/saved/").then((r) => r.data),
+    // DRF pagination wraps list responses in {results: [...]}
+    queryFn: () =>
+      api.get("/wishlist/saved/").then((r) =>
+        Array.isArray(r.data) ? r.data : (r.data?.results ?? [])
+      ),
   })
 
   return (

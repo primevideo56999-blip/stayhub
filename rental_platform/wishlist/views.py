@@ -85,10 +85,17 @@ class SavedPropertiesView(generics.ListAPIView):
     """GET /api/v1/wishlist/saved/ — flat list of all saved properties"""
     permission_classes = [permissions.IsAuthenticated]
     serializer_class   = PropertyListSerializer
+    pagination_class   = None  # flat list — frontend shows everything at once
 
     def get_queryset(self):
-        from properties.models import Property
-        saved_ids = WishlistItem.objects.filter(
-            wishlist__guest=self.request.user
-        ).values_list("property_id", flat=True)
-        return Property.objects.filter(id__in=saved_ids, is_active=True)
+        from django.db.models import Max, Q
+        saved = WishlistItem.objects.filter(wishlist__guest=self.request.user)
+        return (
+            Property.objects
+            .filter(id__in=saved.values_list("property_id", flat=True), is_active=True)
+            .annotate(saved_at=Max(
+                "wishlisted_by__added_at",
+                filter=Q(wishlisted_by__wishlist__guest=self.request.user),
+            ))
+            .order_by("-saved_at")
+        )

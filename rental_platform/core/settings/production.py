@@ -221,3 +221,11 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(minute=0),
     },
 }
+
+SIMPLE_JWT_COOKIE = {
+    "name": "refresh_token",
+    "httponly": True,
+    "samesite": "None",   # required for cross-origin (Render backend ↔ Vercel/other frontend)
+    "secure": True,       # required when samesite="None"
+    "max_age": 60 * 60 * 24 * 7,
+}

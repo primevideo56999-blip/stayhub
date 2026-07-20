@@ -12,6 +12,7 @@ from .serializers import (
 )
 from . import otp as otp_store
 from notifications.tasks import send_otp_email
+from .cookie_token_refresh import set_refresh_cookie, clear_refresh_cookie
 
 
 class CustomTokenSerializer(TokenObtainPairSerializer):
@@ -25,6 +26,14 @@ class CustomTokenSerializer(TokenObtainPairSerializer):
 class LoginView(TokenObtainPairView):
     permission_classes = [AllowAny]
     serializer_class   = CustomTokenSerializer
+
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        if response.status_code == 200:
+            refresh_token = response.data.pop("refresh", None)
+            if refresh_token:
+                set_refresh_cookie(response, refresh_token)
+        return response
 
 
 class RegisterView(generics.CreateAPIView):
@@ -40,24 +49,31 @@ class RegisterView(generics.CreateAPIView):
         code = otp_store.generate_otp(user.id, "verify_account")
         send_otp_email.delay(user.id, code, "verify_account")
         refresh = RefreshToken.for_user(user)
-        return Response({
-            "user":    UserSerializer(user).data,
-            "refresh": str(refresh),
-            "access":  str(refresh.access_token),
+        response = Response({
+            "user":   UserSerializer(user).data,
+            "access": str(refresh.access_token),
+            # refresh is NOT included in the body — it goes into the httpOnly cookie below
         }, status=status.HTTP_201_CREATED)
+        set_refresh_cookie(response, str(refresh))
+        return response
 
 
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        try:
-            refresh_token = request.data["refresh"]
-            token = RefreshToken(refresh_token)
-            token.blacklist()
-            return Response({"detail": "Logged out."}, status=status.HTTP_205_RESET_CONTENT)
-        except Exception:
-            return Response({"detail": "Invalid token."}, status=status.HTTP_400_BAD_REQUEST)
+        from .cookie_token_refresh import _cookie_settings
+        cfg = _cookie_settings()
+        raw_token = request.COOKIES.get(cfg["name"])
+        response = Response({"detail": "Logged out."}, status=status.HTTP_205_RESET_CONTENT)
+        if raw_token:
+            try:
+                token = RefreshToken(raw_token)
+                token.blacklist()
+            except Exception:
+                pass  # already invalid — still clear the cookie
+        clear_refresh_cookie(response)
+        return response
 
 
 class MeView(generics.RetrieveUpdateAPIView):
