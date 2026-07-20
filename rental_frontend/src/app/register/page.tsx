@@ -52,9 +52,9 @@ function RegisterForm() {
     setLoading(true)
     try {
       const { data: res } = await authApi.register(data)
-      localStorage.setItem("access_token",  res.access)
-      localStorage.setItem("refresh_token", res.refresh)
-      useAuthStore.setState({ user: res.user, accessToken: res.access, refreshToken: res.refresh })
+      // Refresh token arrives as an httpOnly cookie — only access is in the body
+      localStorage.setItem("access_token", res.access)
+      useAuthStore.setState({ user: res.user, accessToken: res.access })
       toast.success("Account created! Check your email for the code.")
       setVerifyStep({ email: data.email, role: data.role })
     } catch (err: any) {

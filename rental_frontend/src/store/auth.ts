@@ -7,7 +7,6 @@ import { authApi } from "@/lib/api"
 interface AuthState {
   user:         User | null
   accessToken:  string | null
-  refreshToken: string | null
   isLoading:    boolean
   _hydrated:    boolean           // ← tracks if store has rehydrated from localStorage
 
@@ -25,7 +24,6 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       user:         null,
       accessToken:  null,
-      refreshToken: null,
       isLoading:    false,
       _hydrated:    false,
 
@@ -37,12 +35,12 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true })
         try {
           const { data } = await authApi.login({ email, password })
-          localStorage.setItem("access_token",  data.access)
-          localStorage.setItem("refresh_token", data.refresh)
+          // Refresh token lives in an httpOnly cookie set by the server —
+          // only the short-lived access token is kept client-side
+          localStorage.setItem("access_token", data.access)
           set({
             user:         data.user,
             accessToken:  data.access,
-            refreshToken: data.refresh,
             isLoading:    false,
           })
         } catch (err) {
@@ -52,13 +50,10 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
-        const refresh = get().refreshToken
-        if (refresh) {
-          try { await authApi.logout(refresh) } catch {}
-        }
+        try { await authApi.logout() } catch {}  // server blacklists + clears the cookie
         localStorage.removeItem("access_token")
-        localStorage.removeItem("refresh_token")
-        set({ user: null, accessToken: null, refreshToken: null })
+        localStorage.removeItem("refresh_token") // legacy cleanup
+        set({ user: null, accessToken: null })
       },
 
       fetchMe: async () => {
@@ -76,7 +71,6 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         user:         state.user,
         accessToken:  state.accessToken,
-        refreshToken: state.refreshToken,
       }),
       // Called after rehydration from localStorage completes
       onRehydrateStorage: () => (state) => {

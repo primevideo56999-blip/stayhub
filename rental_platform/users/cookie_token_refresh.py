@@ -91,10 +91,14 @@ class CookieTokenRefreshView(APIView):
                 except AttributeError:
                     pass  # blacklist app not installed — skip silently
 
-            new_refresh = RefreshToken.for_user(refresh.user)  # type: ignore[attr-defined]
+            # Re-issue the same token with a new jti/exp/iat (mirrors
+            # SimpleJWT's TokenRefreshSerializer — no DB lookup needed)
+            refresh.set_jti()
+            refresh.set_exp()
+            refresh.set_iat()
             response.set_cookie(
                 key=cfg["name"],
-                value=str(new_refresh),
+                value=str(refresh),
                 max_age=cfg["max_age"],
                 httponly=cfg["httponly"],
                 samesite=cfg["samesite"],

@@ -5,6 +5,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1
 export const api = axios.create({
   baseURL: API_URL,
   headers: { "Content-Type": "application/json" },
+  withCredentials: true, // refresh token lives in an httpOnly cookie
 })
 
 // Attach access token to every request
@@ -24,9 +25,10 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true
       try {
-        const refresh = localStorage.getItem("refresh_token")
-        if (!refresh) throw new Error("No refresh token")
-        const { data } = await axios.post(`${API_URL}/auth/token/refresh/`, { refresh })
+        // Refresh token is in an httpOnly cookie — the browser attaches it
+        const { data } = await axios.post(
+          `${API_URL}/auth/token/refresh/`, {}, { withCredentials: true }
+        )
         localStorage.setItem("access_token", data.access)
         original.headers.Authorization = `Bearer ${data.access}`
         return api(original)
@@ -44,7 +46,7 @@ api.interceptors.response.use(
 export const authApi = {
   register:  (data: any) => api.post("/auth/register/", data),
   login:     (data: any) => api.post("/auth/login/", data),
-  logout:    (refresh: string) => api.post("/auth/logout/", { refresh }),
+  logout:    () => api.post("/auth/logout/"),  // refresh token comes from the httpOnly cookie
   me:        () => api.get("/auth/me/"),
   updateMe:  (data: any) => api.patch("/auth/me/", data),
   updateMeForm: (data: FormData) =>

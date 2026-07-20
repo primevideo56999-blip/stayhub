@@ -108,6 +108,22 @@ class ChangePasswordView(generics.UpdateAPIView):
         return Response({"detail": "Password updated."})
 
 
+class HostProfileStatusView(APIView):
+    """GET /api/v1/auth/host-profile-status/
+       Mirrors the IsHostProfileComplete permission so the dashboard can
+       warn hosts before they hit publish."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        missing = []
+        if not (user.bio and user.bio.strip()):
+            missing.append("bio")
+        if not user.avatar:
+            missing.append("profile photo")
+        return Response({"is_complete": not missing, "missing": missing})
+
+
 # ── OTP verification ──────────────────────────────────────────────────────────
 
 class OtpSendView(APIView):

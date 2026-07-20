@@ -112,6 +112,7 @@ SIMPLE_JWT = {
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[
     "http://localhost:3000",
 ])
+CORS_ALLOW_CREDENTIALS = True  # httpOnly refresh cookie must ride cross-origin requests
 
 # ── Celery ────────────────────────────────────────────────────────────────────
 CELERY_BROKER_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
